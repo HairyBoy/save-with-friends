@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useLanguage } from "@/components/LanguageProvider";
 
 type Tab = {
   href: string;
@@ -11,19 +12,20 @@ type Tab = {
   match: (pathname: string) => boolean;
 };
 
-const TABS: Tab[] = [
-  { href: "/", label: "Mine", icon: "🐷", match: (p) => p === "/" },
-  { href: "/create", label: "Create", icon: "➕", match: (p) => p.startsWith("/create") },
-  { href: "/friends", label: "Friends", icon: "👥", match: (p) => p.startsWith("/friends") },
-  { href: "/profile", label: "Me", icon: "👤", match: (p) => p.startsWith("/profile") },
-];
-
 export function BottomNav() {
   const pathname = usePathname();
+  const { t } = useLanguage();
+
+  const tabs: Tab[] = [
+    { href: "/", label: t.nav.mine, icon: "🐷", match: (p) => p === "/" },
+    { href: "/create", label: t.nav.create, icon: "➕", match: (p) => p.startsWith("/create") },
+    { href: "/friends", label: t.nav.friends, icon: "👥", match: (p) => p.startsWith("/friends") },
+    { href: "/profile", label: t.nav.me, icon: "👤", match: (p) => p.startsWith("/profile") },
+  ];
 
   return (
     <nav className="sticky bottom-0 z-10 flex border-t border-neutral-200 bg-white">
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = tab.match(pathname);
         return (
           <Link

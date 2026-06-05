@@ -1,37 +1,43 @@
-import Link from "next/link";
+"use client";
 
-// Skeleton: PiggyBank detail (full-screen push, no tab bar).
-export default async function PiggyBankDetailScreen({
-  params,
-}: PageProps<"/piggybank/[id]">) {
-  const { id } = await params;
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useLanguage } from "@/components/LanguageProvider";
+
+// PiggyBank detail (full-screen push, no tab bar).
+export default function PiggyBankDetailScreen() {
+  const { t } = useLanguage();
+  const { id } = useParams<{ id: string }>();
 
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-5 py-6">
       <Link href="/" className="text-sm text-neutral-400">
-        ← My PiggyBanks
+        ← {t.piggybankDetail.back}
       </Link>
 
       <header>
-        <h1 className="text-xl font-bold">PiggyBank #{id}</h1>
-        <p className="text-sm text-neutral-500">[ name ]</p>
+        <h1 className="text-xl font-bold">
+          {t.piggybankDetail.titlePrefix}
+          {id}
+        </h1>
+        <p className="text-sm text-neutral-500">{t.piggybankDetail.namePlaceholder}</p>
       </header>
 
       <section className="rounded-lg border border-neutral-200 p-4 text-center">
-        <p className="text-sm text-neutral-500">[ pig filling up · progress ring ]</p>
-        <p className="text-2xl font-semibold">[ saved / goal ]</p>
+        <p className="text-sm text-neutral-500">{t.piggybankDetail.pigPlaceholder}</p>
+        <p className="text-2xl font-semibold">{t.piggybankDetail.savedGoal}</p>
       </section>
 
       <section className="rounded-lg border border-neutral-200 p-4">
-        <p className="text-sm font-medium">Unlocks when</p>
-        <p className="text-sm text-neutral-500">🎯 goal reached</p>
-        <p className="text-sm text-neutral-500">⏳ timer ends</p>
-        <p className="text-sm text-neutral-500">🤝 a friend approves early exit</p>
+        <p className="text-sm font-medium">{t.piggybankDetail.unlocksWhen}</p>
+        <p className="text-sm text-neutral-500">{t.piggybankDetail.goalReached}</p>
+        <p className="text-sm text-neutral-500">{t.piggybankDetail.timerEnds}</p>
+        <p className="text-sm text-neutral-500">{t.piggybankDetail.friendApproves}</p>
       </section>
 
       <section className="rounded-lg border border-neutral-200 p-4">
-        <p className="text-sm font-medium">Yield earned</p>
-        <p className="text-sm text-neutral-500">[ earned while locked ]</p>
+        <p className="text-sm font-medium">{t.piggybankDetail.yieldEarned}</p>
+        <p className="text-sm text-neutral-500">{t.piggybankDetail.yieldBody}</p>
       </section>
 
       <div className="mt-auto flex flex-col gap-2">
@@ -39,13 +45,13 @@ export default async function PiggyBankDetailScreen({
           type="button"
           className="rounded-lg bg-neutral-900 p-4 text-center text-sm font-medium text-white"
         >
-          Deposit
+          {t.piggybankDetail.deposit}
         </button>
         <button
           type="button"
           className="rounded-lg border border-neutral-200 p-4 text-center text-sm"
         >
-          Request early exit
+          {t.piggybankDetail.requestEarlyExit}
         </button>
       </div>
     </div>

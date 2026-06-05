@@ -1,27 +1,36 @@
-import Link from "next/link";
+"use client";
 
-// Skeleton: Profile / Me — account hint, settings, legal, support.
+import Link from "next/link";
+import { useLanguage } from "@/components/LanguageProvider";
+import { LanguageToggle } from "@/components/LanguageToggle";
+
+// Profile / Me — account hint, settings, legal, support. The language setting is
+// the first real setting here; the rest stay placeholders for now.
 export default function ProfileScreen() {
+  const { t } = useLanguage();
+
   return (
     <div className="flex flex-col gap-6 px-5 py-6">
       <header>
-        <h1 className="text-xl font-bold">Me</h1>
-        <p className="text-sm text-neutral-500">Mi perfil</p>
+        <h1 className="text-xl font-bold">{t.profile.title}</h1>
       </header>
 
       <section className="rounded-lg border border-neutral-200 p-4">
-        <p className="text-sm font-medium">MiniPay account</p>
-        <p className="text-sm text-neutral-500">[ address hint · 0x1234…abcd ]</p>
+        <p className="text-sm font-medium">{t.profile.account}</p>
+        <p className="text-sm text-neutral-500">{t.profile.addressHint}</p>
       </section>
 
       <section className="flex flex-col gap-2">
-        <p className="rounded-lg border border-neutral-200 p-4 text-sm">Settings</p>
-        <p className="rounded-lg border border-neutral-200 p-4 text-sm">Terms & Privacy</p>
-        <p className="rounded-lg border border-neutral-200 p-4 text-sm">Support</p>
+        <div className="flex items-center justify-between rounded-lg border border-neutral-200 p-4">
+          <p className="text-sm font-medium">{t.profile.language}</p>
+          <LanguageToggle />
+        </div>
+        <p className="rounded-lg border border-neutral-200 p-4 text-sm">{t.profile.terms}</p>
+        <p className="rounded-lg border border-neutral-200 p-4 text-sm">{t.profile.support}</p>
       </section>
 
       <Link href="/onboarding" className="text-center text-sm text-neutral-400 underline">
-        View onboarding
+        {t.profile.viewOnboarding}
       </Link>
     </div>
   );

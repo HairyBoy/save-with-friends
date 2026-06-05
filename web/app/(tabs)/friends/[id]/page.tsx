@@ -1,28 +1,33 @@
-import Link from "next/link";
+"use client";
 
-// Skeleton: a friend's PiggyBank (read-only + encouragement).
-export default async function FriendDetailScreen({
-  params,
-}: PageProps<"/friends/[id]">) {
-  const { id } = await params;
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useLanguage } from "@/components/LanguageProvider";
+
+// A friend's PiggyBank (read-only + encouragement).
+export default function FriendDetailScreen() {
+  const { t } = useLanguage();
+  const { id } = useParams<{ id: string }>();
 
   return (
     <div className="flex flex-col gap-6 px-5 py-6">
       <Link href="/friends" className="text-sm text-neutral-400">
-        ← Friends
+        ← {t.friendDetail.back}
       </Link>
 
       <header>
-        <h1 className="text-xl font-bold">Friend: {id}</h1>
-        <p className="text-sm text-neutral-500">[ their PiggyBank progress ]</p>
+        <h1 className="text-xl font-bold">
+          {t.friendDetail.titlePrefix} {id}
+        </h1>
+        <p className="text-sm text-neutral-500">{t.friendDetail.progress}</p>
       </header>
 
       <section className="rounded-lg border border-neutral-200 p-4">
-        <p className="text-sm text-neutral-500">[ goal · progress · on-pace status ]</p>
+        <p className="text-sm text-neutral-500">{t.friendDetail.statusLine}</p>
       </section>
 
       <button className="rounded-lg border border-neutral-200 p-4 text-sm" type="button">
-        👏 Cheer them on
+        {t.friendDetail.cheer}
       </button>
     </div>
   );
