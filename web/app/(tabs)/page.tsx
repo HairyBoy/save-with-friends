@@ -37,7 +37,7 @@ export default function MyVaultsScreen() {
               className="flex items-center gap-3 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md"
             >
               <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-tint text-lg">
-                🐷
+                🏦
               </span>
               <span className="flex-1 text-sm font-medium">{v.name}</span>
               <span className="text-sm font-medium text-primary">{t.home.details} →</span>

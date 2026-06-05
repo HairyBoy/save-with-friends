@@ -17,7 +17,7 @@ export default function OnboardingScreen() {
       </div>
 
       <div className="flex flex-1 flex-col justify-center gap-4 text-center">
-        <p className="text-5xl">🐷</p>
+        <p className="text-5xl">🏦</p>
         <h1 className="text-2xl font-bold">{t.onboarding.brand}</h1>
         <p className="text-sm text-neutral-500">{t.onboarding.valueProp}</p>
       </div>
