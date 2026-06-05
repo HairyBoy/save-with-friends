@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 
-// A friend's PiggyBank (read-only + encouragement).
+// A friend's Vault (read-only + encouragement).
 export default function FriendDetailScreen() {
   const { t } = useLanguage();
   const { id } = useParams<{ id: string }>();

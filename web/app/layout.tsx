@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Save with Friends · Ahorra con Amigos",
   description:
-    "Social savings on Celo — lock funds in a PiggyBank toward a goal, save with friends.",
+    "Social savings on Celo — lock funds in a Vault toward a goal, save with friends.",
 };
 
 // Mobile-first: MiniPay renders at ~360×640. Lock the viewport to device width.

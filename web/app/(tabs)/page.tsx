@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
 
-// My PiggyBanks (home). Bold/immersive emerald theme: a green header band carries
+// My Vaults (home). Bold/immersive emerald theme: a green header band carries
 // the title + total saved, tinted cards below. Real data still placeholdered.
-export default function MyPiggyBanksScreen() {
+export default function MyVaultsScreen() {
   const { t } = useLanguage();
 
   // Stubbed list so navigation into the detail screen is wired up.
-  const piggyBanks = [
+  const vaults = [
     { id: "1", name: "Trip to Cartagena" },
     { id: "2", name: "New laptop" },
   ];
@@ -29,17 +29,17 @@ export default function MyPiggyBanksScreen() {
         </section>
 
         <section className="flex flex-col gap-2.5">
-          <p className="text-sm font-medium text-neutral-700">{t.home.yourPiggyBanks}</p>
-          {piggyBanks.map((pb) => (
+          <p className="text-sm font-medium text-neutral-700">{t.home.yourVaults}</p>
+          {vaults.map((v) => (
             <Link
-              key={pb.id}
-              href={`/piggybank/${pb.id}`}
+              key={v.id}
+              href={`/vault/${v.id}`}
               className="flex items-center gap-3 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md"
             >
               <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-tint text-lg">
                 🐷
               </span>
-              <span className="flex-1 text-sm font-medium">{pb.name}</span>
+              <span className="flex-1 text-sm font-medium">{v.name}</span>
               <span className="text-sm font-medium text-primary">{t.home.details} →</span>
             </Link>
           ))}
