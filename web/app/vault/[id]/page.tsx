@@ -3,11 +3,17 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useVault } from "@/hooks/useVaults";
 
 // Vault detail (full-screen push, no tab bar).
 export default function VaultDetailScreen() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { id } = useParams<{ id: string }>();
+  const { vault, isLoading } = useVault(id);
+
+  const numLocale = lang === "es" ? "es-CO" : "en-US";
+  const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
+  const pct = vault && vault.goal > 0 ? Math.min(100, Math.round((vault.saved / vault.goal) * 100)) : 0;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -19,13 +25,20 @@ export default function VaultDetailScreen() {
           {t.vaultDetail.titlePrefix}
           {id}
         </h1>
-        <p className="text-sm text-white/70">{t.vaultDetail.namePlaceholder}</p>
+        <p className="text-sm text-white/70">
+          {vault?.name ?? (isLoading ? "…" : t.vaultDetail.namePlaceholder)}
+        </p>
       </header>
 
       <div className="flex flex-1 flex-col gap-5 px-5 py-6">
+        {/* Fill progress — the "vault filling up" centerpiece. */}
         <section className="rounded-2xl border border-white/60 bg-white/60 p-5 text-center shadow-sm backdrop-blur-md">
-          <p className="text-sm text-neutral-500">{t.vaultDetail.pigPlaceholder}</p>
-          <p className="mt-1 text-2xl font-semibold text-primary-dark">{t.vaultDetail.savedGoal}</p>
+          <p className="text-3xl font-semibold text-primary-dark">${fmt(vault?.saved ?? 0)}</p>
+          <p className="mt-1 text-sm text-neutral-400">/ ${fmt(vault?.goal ?? 0)}</p>
+          <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-primary-tint">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-2 text-xs font-medium text-neutral-500">{pct}%</p>
         </section>
 
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
@@ -37,7 +50,7 @@ export default function VaultDetailScreen() {
 
         <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
           <p className="text-sm font-semibold text-primary-dark">{t.vaultDetail.yieldEarned}</p>
-          <p className="mt-1 text-sm text-neutral-600">{t.vaultDetail.yieldBody}</p>
+          <p className="mt-1 text-sm text-neutral-600">${fmt(vault?.yieldEarned ?? 0)}</p>
         </section>
 
         <div className="mt-auto flex flex-col gap-2.5">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useFriends } from "@/hooks/useVaults";
 
 // Create a Vault (full-screen flow, no tab bar). Single scrolling form:
 // icon, name, USD goal, the starting amount locked now, an unlock timer, and
@@ -10,12 +11,6 @@ import { useLanguage } from "@/components/LanguageProvider";
 // (MiniPay balances are USD stablecoins).
 
 const ICONS = ["🔒", "🏦", "💰", "🐷", "✈️", "💻", "🎓", "🏠", "🎁"] as const;
-
-// Stub friends — same set the Friends tab uses, until the real social graph lands.
-const FRIENDS = [
-  { id: "ana", name: "Ana" },
-  { id: "luis", name: "Luis" },
-];
 
 const GOAL_MIN = 5;
 const DEPOSIT_MIN = 1;
@@ -34,6 +29,7 @@ function isoFromNow({ days = 0, months = 0 }: { days?: number; months?: number }
 export default function CreateVaultScreen() {
   const { t, lang } = useLanguage();
   const router = useRouter();
+  const { friends: friendOptions, isLoading: friendsLoading } = useFriends();
 
   const [icon, setIcon] = useState<string>(ICONS[0]);
   const [name, setName] = useState("");
@@ -61,7 +57,9 @@ export default function CreateVaultScreen() {
         year: "numeric",
       })
     : null;
-  const approverNames = FRIENDS.filter((f) => friends.includes(f.id)).map((f) => f.name);
+  const approverNames = friendOptions
+    .filter((f) => friends.includes(f.id))
+    .map((f) => f.name);
 
   function pickPreset(key: PresetKey) {
     setPreset(key);
@@ -231,25 +229,32 @@ export default function CreateVaultScreen() {
         <div className="flex flex-col gap-2">
           <p className={labelClass}>{t.create.friendsLabel}</p>
           <div className="flex flex-wrap gap-2">
-            {FRIENDS.map((f) => {
-              const on = friends.includes(f.id);
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => toggleFriend(f.id)}
-                  aria-pressed={on}
-                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
-                    on
-                      ? "border-primary bg-primary-tint text-primary-dark shadow-sm"
-                      : "border-white/60 bg-white/60 text-neutral-700"
-                  }`}
-                >
-                  <span>{on ? "🔑" : "👤"}</span>
-                  {f.name}
-                </button>
-              );
-            })}
+            {friendsLoading
+              ? [0, 1].map((i) => (
+                  <div
+                    key={i}
+                    className="h-9 w-24 animate-pulse rounded-xl border border-white/60 bg-white/60"
+                  />
+                ))
+              : friendOptions.map((f) => {
+                  const on = friends.includes(f.id);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => toggleFriend(f.id)}
+                      aria-pressed={on}
+                      className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
+                        on
+                          ? "border-primary bg-primary-tint text-primary-dark shadow-sm"
+                          : "border-white/60 bg-white/60 text-neutral-700"
+                      }`}
+                    >
+                      <span>{on ? "🔑" : "👤"}</span>
+                      {f.name}
+                    </button>
+                  );
+                })}
           </div>
           <p className="text-xs text-neutral-400">{t.create.friendsHint}</p>
         </div>
