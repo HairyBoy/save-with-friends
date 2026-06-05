@@ -24,7 +24,7 @@ export function LanguageToggle({ className = "" }: { className?: string }) {
             aria-pressed={active}
             onClick={() => setLang(option)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              active ? "bg-neutral-900 text-white" : "text-neutral-500"
+              active ? "bg-primary text-white" : "text-neutral-500"
             }`}
           >
             {LANG_LABELS[option]}

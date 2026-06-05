@@ -24,7 +24,7 @@ export default function OnboardingScreen() {
 
       <Link
         href="/"
-        className="rounded-lg bg-neutral-900 p-4 text-center text-sm font-medium text-white"
+        className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 text-center text-sm font-medium text-white shadow-lg shadow-emerald-600/20"
       >
         {t.onboarding.getStarted}
       </Link>

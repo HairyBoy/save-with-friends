@@ -10,7 +10,9 @@ export default function TabsLayout({
 }>) {
   return (
     <div className="flex min-h-dvh flex-col">
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      {/* Bottom padding so content clears the floating glass tab bar (which is
+          positioned over the content, not in flow). */}
+      <main className="flex-1 pb-28">{children}</main>
       <BottomNav />
     </div>
   );

@@ -10,6 +10,14 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Emerald "money green" theme. Semantic tokens so screens share one palette:
+     primary = brand green, -dark for hovers/text-on-tint, -light for borders,
+     -tint for soft card/surface fills. */
+  --color-primary: #059669; /* emerald-600 */
+  --color-primary-dark: #047857; /* emerald-700 */
+  --color-primary-light: #a7f3d0; /* emerald-200 */
+  --color-primary-tint: #ecfdf5; /* emerald-50 */
 }
 
 /* Forcing a light theme for consistent rendering inside the MiniPay in-app browser. */

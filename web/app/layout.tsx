@@ -37,8 +37,18 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-neutral-100">
-        {/* Centered mobile frame so the app reads as a phone screen on desktop too. */}
-        <div className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-col bg-white">
+        {/* Centered mobile frame so the app reads as a phone screen on desktop too.
+            Soft emerald gradient + blurred glows give the frosted-glass surfaces
+            (tab bar, cards) something to blur, for the futuristic look. */}
+        <div className="relative mx-auto flex min-h-dvh w-full max-w-[420px] flex-col overflow-hidden bg-gradient-to-b from-emerald-50/40 via-white to-emerald-50/70">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-primary/25 blur-3xl"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-16 left-1/2 h-60 w-72 -translate-x-1/2 rounded-full bg-emerald-400/25 blur-3xl"
+          />
           <LanguageProvider>{children}</LanguageProvider>
         </div>
       </body>

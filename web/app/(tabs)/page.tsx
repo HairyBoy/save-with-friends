@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
 
-// My PiggyBanks (home). Plain-text placeholders — design + real data later.
+// My PiggyBanks (home). Bold/immersive emerald theme: a green header band carries
+// the title + total saved, tinted cards below. Real data still placeholdered.
 export default function MyPiggyBanksScreen() {
   const { t } = useLanguage();
 
@@ -14,39 +15,42 @@ export default function MyPiggyBanksScreen() {
   ];
 
   return (
-    <div className="flex flex-col gap-6 px-5 py-6">
-      <header>
+    <div className="flex flex-col">
+      <header className="rounded-b-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-5 pt-10 pb-7 text-white shadow-lg shadow-emerald-600/20">
         <h1 className="text-xl font-bold">{t.home.title}</h1>
+        <p className="mt-5 text-sm text-white/70">{t.home.totalSaved}</p>
+        <p className="text-3xl font-semibold">{t.home.totalAmount}</p>
       </header>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
-        <p className="text-sm text-neutral-500">{t.home.totalSaved}</p>
-        <p className="text-2xl font-semibold">{t.home.totalAmount}</p>
-      </section>
+      <div className="flex flex-col gap-5 px-5 py-6">
+        <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
+          <p className="text-sm font-semibold text-primary-dark">{t.home.agentUpdate}</p>
+          <p className="mt-1 text-sm text-neutral-600">{t.home.agentUpdateBody}</p>
+        </section>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
-        <p className="text-sm font-medium">{t.home.agentUpdate}</p>
-        <p className="text-sm text-neutral-500">{t.home.agentUpdateBody}</p>
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <p className="text-sm font-medium">{t.home.yourPiggyBanks}</p>
-        {piggyBanks.map((pb) => (
+        <section className="flex flex-col gap-2.5">
+          <p className="text-sm font-medium text-neutral-700">{t.home.yourPiggyBanks}</p>
+          {piggyBanks.map((pb) => (
+            <Link
+              key={pb.id}
+              href={`/piggybank/${pb.id}`}
+              className="flex items-center gap-3 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md"
+            >
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-tint text-lg">
+                🐷
+              </span>
+              <span className="flex-1 text-sm font-medium">{pb.name}</span>
+              <span className="text-sm font-medium text-primary">{t.home.details} →</span>
+            </Link>
+          ))}
           <Link
-            key={pb.id}
-            href={`/piggybank/${pb.id}`}
-            className="rounded-lg border border-neutral-200 p-4 text-sm"
+            href="/create"
+            className="rounded-2xl border border-dashed border-primary/40 bg-white/40 p-4 text-center text-sm font-medium text-primary-dark backdrop-blur-md"
           >
-            🐷 {pb.name} <span className="text-neutral-400">→ {t.home.details}</span>
+            ➕ {t.home.create}
           </Link>
-        ))}
-        <Link
-          href="/create"
-          className="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-500"
-        >
-          ➕ {t.home.create}
-        </Link>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }
