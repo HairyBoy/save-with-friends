@@ -64,7 +64,7 @@ const FAKE_FRIENDS: Friend[] = [
   { id: "luis", name: "Luis" },
 ];
 
-const FAKE_VAULTS: Vault[] = [
+let FAKE_VAULTS: Vault[] = [
   {
     id: "1",
     name: "Trip to Cartagena",
@@ -91,6 +91,46 @@ const FAKE_VAULTS: Vault[] = [
     createdAt: "2026-04-22",
     shared: false,
   },
+  {
+    id: "3",
+    name: "Beach house",
+    icon: "🏠",
+    goal: 2000,
+    saved: 700,
+    currency: "USD",
+    deadline: "2027-01-15",
+    yieldEarned: 12.4,
+    createdAt: "2026-05-01",
+    shared: true,
+    splitMode: "contribution",
+    ownerName: "You",
+    inviteStatus: "accepted",
+    members: [
+      { id: CURRENT_USER_ID, name: "You", contributed: 300, accepted: true },
+      { id: "ana", name: "Ana", contributed: 250, accepted: true },
+      { id: "luis", name: "Luis", contributed: 150, accepted: true },
+    ],
+  },
+  {
+    id: "4",
+    name: "Sofía's birthday gift",
+    icon: "🎁",
+    goal: 300,
+    saved: 150,
+    currency: "USD",
+    deadline: "2026-08-20",
+    yieldEarned: 1.1,
+    createdAt: "2026-06-02",
+    shared: true,
+    splitMode: "equal",
+    ownerName: "Ana",
+    inviteStatus: "pending",
+    members: [
+      { id: "ana", name: "Ana", contributed: 90, accepted: true },
+      { id: "luis", name: "Luis", contributed: 60, accepted: true },
+      { id: CURRENT_USER_ID, name: "You", contributed: 0, accepted: false },
+    ],
+  },
 ];
 
 // --- "API" — async so the swap to real chain/backend reads is drop-in -------
@@ -103,9 +143,18 @@ export async function getVault(id: string): Promise<Vault | null> {
   return FAKE_VAULTS.find((v) => v.id === id) ?? null;
 }
 
+// The current user's own stake in a vault: the full amount for a solo vault,
+// their member contribution for an accepted shared vault, nothing for a pending
+// invite (you haven't joined yet).
+function myAmount(v: Vault): number {
+  if (!v.shared) return v.saved;
+  if (v.inviteStatus !== "accepted") return 0;
+  return v.members?.find((m) => m.id === CURRENT_USER_ID)?.contributed ?? 0;
+}
+
 export async function getSavingsSummary(): Promise<SavingsSummary> {
   const vaults = await getVaults();
-  const currentlySaving = vaults.reduce((sum, v) => sum + v.saved, 0);
+  const currentlySaving = vaults.reduce((sum, v) => sum + myAmount(v), 0);
   // Lifetime total also counts past/completed vaults (stubbed extra for now).
   const savedAllTime = currentlySaving + 1080;
   return { currentlySaving, savedAllTime, currency: "USD" };
@@ -125,4 +174,68 @@ export async function getDailyPrize(): Promise<DailyPrize> {
 
 export async function getFriends(): Promise<Friend[]> {
   return FAKE_FRIENDS;
+}
+
+export type NewVaultInput = {
+  name: string;
+  icon: string;
+  goal: number;
+  deposit: number; // the creator's starting amount
+  deadline: string | null;
+  shared: boolean;
+  splitMode: SplitMode;
+  friendIds: string[]; // solo: keyholders · shared: invited members
+};
+
+let nextVaultId = 100;
+
+// Create a vault. The stub appends to the in-memory list (survives navigation,
+// resets on reload), so a vault you create shows up on the home screen.
+export async function createVault(input: NewVaultInput): Promise<Vault> {
+  const base = {
+    id: String(nextVaultId++),
+    name: input.name,
+    icon: input.icon,
+    goal: input.goal,
+    saved: input.deposit,
+    currency: "USD" as const,
+    deadline: input.deadline,
+    yieldEarned: 0,
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
+  const vault: Vault = input.shared
+    ? {
+        ...base,
+        shared: true,
+        splitMode: input.splitMode,
+        ownerName: "You",
+        inviteStatus: "accepted",
+        members: [
+          { id: CURRENT_USER_ID, name: "You", contributed: input.deposit, accepted: true },
+          ...input.friendIds.map((fid) => ({
+            id: fid,
+            name: FAKE_FRIENDS.find((f) => f.id === fid)?.name ?? fid,
+            contributed: 0,
+            accepted: false,
+          })),
+        ],
+      }
+    : { ...base, shared: false, keyholders: input.friendIds };
+  FAKE_VAULTS = [...FAKE_VAULTS, vault];
+  return vault;
+}
+
+// Accept a pending shared-vault invite (you become an accepted member).
+export async function acceptInvite(id: string): Promise<void> {
+  const vault = FAKE_VAULTS.find((v) => v.id === id);
+  if (vault?.shared && vault.inviteStatus === "pending") {
+    vault.inviteStatus = "accepted";
+    const me = vault.members?.find((m) => m.id === CURRENT_USER_ID);
+    if (me) me.accepted = true;
+  }
+}
+
+// Decline a pending invite (drop it from your list).
+export async function declineInvite(id: string): Promise<void> {
+  FAKE_VAULTS = FAKE_VAULTS.filter((v) => v.id !== id);
 }

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useFriends } from "@/hooks/useVaults";
+import { createVault } from "@/lib/vaults";
 import {
   resetVaultDraft,
   setVaultDraft,
@@ -80,11 +81,20 @@ export default function CreateVaultScreen() {
     resetVaultDraft();
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
-    // TODO: create the Vault on-chain (savings-lock contract) + lock the starting
-    // amount once the contract exists. For now, clear the draft and return home.
+    await createVault({
+      name: name.trim(),
+      icon,
+      goal: goalNum,
+      deposit: depositNum,
+      deadline: deadline || null,
+      shared,
+      splitMode,
+      friendIds: friends,
+    });
+    // TODO: replace this stub with the real on-chain create + initial deposit.
     resetVaultDraft();
     router.push("/");
   }

@@ -37,6 +37,10 @@ const en = {
     agentUpdate: "Agent's daily update",
     agentUpdateBody: "[ what the agent did today + why ]",
     yourVaults: "Your Vaults",
+    sharedVaults: "Shared Vaults",
+    pending: "Pending",
+    invitedBy: "Invited by",
+    members: "members",
     details: "details",
     create: "Create a Vault",
   },
@@ -109,6 +113,9 @@ const en = {
     yieldBody: "[ earned while locked ]",
     deposit: "Deposit",
     requestEarlyExit: "Request early exit",
+    members: "Members",
+    accept: "Accept",
+    decline: "Decline",
   },
 
   profile: {
@@ -152,6 +159,10 @@ const es: typeof en = {
     agentUpdate: "Resumen diario del agente",
     agentUpdateBody: "[ qué hizo el agente hoy + por qué ]",
     yourVaults: "Tus Alcancías",
+    sharedVaults: "Alcancías compartidas",
+    pending: "Pendiente",
+    invitedBy: "Invitado por",
+    members: "miembros",
     details: "detalles",
     create: "Crear una Alcancía",
   },
@@ -224,6 +235,9 @@ const es: typeof en = {
     yieldBody: "[ ganado mientras estaba bloqueado ]",
     deposit: "Depositar",
     requestEarlyExit: "Solicitar apertura anticipada",
+    members: "Miembros",
+    accept: "Aceptar",
+    decline: "Rechazar",
   },
 
   profile: {
