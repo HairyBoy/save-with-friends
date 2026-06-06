@@ -1,21 +1,25 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
+import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useFriends } from "@/hooks/useVaults";
+import {
+  resetVaultDraft,
+  setVaultDraft,
+  useVaultDraft,
+  type PresetKey,
+} from "@/hooks/useVaultDraft";
 
-// Create a Vault (full-screen flow, no tab bar). Single scrolling form:
-// icon, name, USD goal, the starting amount locked now, an unlock timer, and
-// friends who hold keys — with a live preview. Goals/deposits are in USD
-// (MiniPay balances are USD stablecoins).
+// Create a Vault (a tab — the draft survives leaving/returning to the tab, and
+// clears on Cancel/submit or when the app closes). Single scrolling form: icon,
+// name, USD goal, the starting amount locked now, an unlock timer, and friends
+// who hold keys — with a live preview. Goals/deposits are in USD.
 
 const ICONS = ["🔒", "🏦", "💰", "🐷", "✈️", "💻", "🎓", "🏠", "🎁"] as const;
 
 const GOAL_MIN = 5;
 const DEPOSIT_MIN = 1;
-
-type PresetKey = "1w" | "1m" | "3m" | "custom";
 
 // Returns an ISO yyyy-mm-dd offset from today. Called only from event handlers
 // (never during render) so it can't cause a hydration mismatch.
@@ -30,14 +34,8 @@ export default function CreateVaultScreen() {
   const { t, lang } = useLanguage();
   const router = useRouter();
   const { friends: friendOptions, isLoading: friendsLoading } = useFriends();
-
-  const [icon, setIcon] = useState<string>(ICONS[0]);
-  const [name, setName] = useState("");
-  const [goal, setGoal] = useState("");
-  const [deposit, setDeposit] = useState("");
-  const [preset, setPreset] = useState<PresetKey | null>(null);
-  const [deadline, setDeadline] = useState(""); // yyyy-mm-dd
-  const [friends, setFriends] = useState<string[]>([]);
+  const draft = useVaultDraft();
+  const { icon, name, goal, deposit, preset, deadline, friends } = draft;
 
   const goalNum = Number(goal);
   const depositNum = Number(deposit);
@@ -62,22 +60,29 @@ export default function CreateVaultScreen() {
     .map((f) => f.name);
 
   function pickPreset(key: PresetKey) {
-    setPreset(key);
-    if (key === "1w") setDeadline(isoFromNow({ days: 7 }));
-    else if (key === "1m") setDeadline(isoFromNow({ months: 1 }));
-    else if (key === "3m") setDeadline(isoFromNow({ months: 3 }));
-    // "custom" reveals the date input below without changing the value.
+    if (key === "1w") setVaultDraft({ preset: key, deadline: isoFromNow({ days: 7 }) });
+    else if (key === "1m") setVaultDraft({ preset: key, deadline: isoFromNow({ months: 1 }) });
+    else if (key === "3m") setVaultDraft({ preset: key, deadline: isoFromNow({ months: 3 }) });
+    else setVaultDraft({ preset: key }); // "custom" reveals the date input below
   }
 
   function toggleFriend(id: string) {
-    setFriends((cur) => (cur.includes(id) ? cur.filter((f) => f !== id) : [...cur, id]));
+    setVaultDraft({
+      friends: friends.includes(id) ? friends.filter((f) => f !== id) : [...friends, id],
+    });
+  }
+
+  function cancel() {
+    resetVaultDraft();
+    router.push("/");
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
     // TODO: create the Vault on-chain (savings-lock contract) + lock the starting
-    // amount once the contract exists. For now the form just returns home.
+    // amount once the contract exists. For now, clear the draft and return home.
+    resetVaultDraft();
     router.push("/");
   }
 
@@ -95,22 +100,33 @@ export default function CreateVaultScreen() {
     "flex items-center gap-2 rounded-2xl border border-white/60 bg-white/60 px-4 py-3 shadow-sm backdrop-blur-md transition focus-within:border-primary/50";
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      {/* Slim header — centered title, transparent Cancel button on the left. */}
-      <header className="rounded-b-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-5 pt-6 pb-5 text-white shadow-lg shadow-emerald-600/20">
-        <div className="relative flex items-center justify-center">
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="absolute left-0 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white backdrop-blur-md transition hover:bg-white/25"
-          >
+    <div className="flex flex-col">
+      <TopBar
+        title={t.create.title}
+        left={
+          <button type="button" onClick={cancel} className={topBarActionClass}>
             {t.create.cancel}
           </button>
-          <h1 className="text-lg font-bold">{t.create.title}</h1>
-        </div>
-      </header>
+        }
+      />
 
-      <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-6 px-5 py-6">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6 px-5 py-6">
+        {/* Name */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="v-name" className={labelClass}>
+            {t.create.nameLabel}
+          </label>
+          <input
+            id="v-name"
+            type="text"
+            value={name}
+            maxLength={40}
+            onChange={(e) => setVaultDraft({ name: e.target.value })}
+            placeholder={t.create.namePlaceholder}
+            className={fieldClass}
+          />
+        </div>
+
         {/* Icon */}
         <div className="flex flex-col gap-2">
           <p className={labelClass}>{t.create.iconLabel}</p>
@@ -119,7 +135,7 @@ export default function CreateVaultScreen() {
               <button
                 key={ic}
                 type="button"
-                onClick={() => setIcon(ic)}
+                onClick={() => setVaultDraft({ icon: ic })}
                 aria-pressed={icon === ic}
                 className={`grid h-11 w-11 place-items-center rounded-xl border text-xl backdrop-blur-md transition ${
                   icon === ic
@@ -131,22 +147,6 @@ export default function CreateVaultScreen() {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Name */}
-        <div className="flex flex-col gap-2">
-          <label htmlFor="v-name" className={labelClass}>
-            {t.create.nameLabel}
-          </label>
-          <input
-            id="v-name"
-            type="text"
-            value={name}
-            maxLength={40}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t.create.namePlaceholder}
-            className={fieldClass}
-          />
         </div>
 
         {/* Goal (USD) */}
@@ -161,7 +161,7 @@ export default function CreateVaultScreen() {
               type="text"
               inputMode="decimal"
               value={goal}
-              onChange={(e) => setGoal(e.target.value)}
+              onChange={(e) => setVaultDraft({ goal: e.target.value })}
               placeholder="0"
               className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400"
             />
@@ -184,7 +184,7 @@ export default function CreateVaultScreen() {
               type="text"
               inputMode="decimal"
               value={deposit}
-              onChange={(e) => setDeposit(e.target.value)}
+              onChange={(e) => setVaultDraft({ deposit: e.target.value })}
               placeholder="1"
               className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400"
             />
@@ -219,7 +219,7 @@ export default function CreateVaultScreen() {
             <input
               type="date"
               value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
+              onChange={(e) => setVaultDraft({ deadline: e.target.value })}
               className={fieldClass}
             />
           )}
@@ -302,7 +302,7 @@ export default function CreateVaultScreen() {
         <button
           type="submit"
           disabled={!valid}
-          className="mt-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 text-center text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+          className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 text-center text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
         >
           {t.create.submit}
         </button>
