@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
+import { TopBar, topBarAvatarClass } from "@/components/TopBar";
 import { useSavings } from "@/hooks/useVaults";
 
-// My Vaults (home). Bold/immersive emerald theme: a green header band carries
-// the title + total saved, vault cards (with fill progress) below.
+// My Vaults (home). Unified top bar (title + avatar → Me); savings stats,
+// agent update, and vault cards (with fill progress) live in the body.
 export default function MyVaultsScreen() {
   const { t, lang } = useLanguage();
   const { vaults, summary, isLoading } = useSavings();
@@ -15,13 +16,31 @@ export default function MyVaultsScreen() {
 
   return (
     <div className="flex flex-col">
-      <header className="rounded-b-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-5 pt-10 pb-7 text-white shadow-lg shadow-emerald-600/20">
-        <h1 className="text-xl font-bold">{t.home.title}</h1>
-        <p className="mt-5 text-sm text-white/70">{t.home.totalSaved}</p>
-        <p className="text-3xl font-semibold">{summary ? `$${fmt(summary.totalSaved)}` : "—"}</p>
-      </header>
+      <TopBar
+        title={t.home.title}
+        right={
+          <Link href="/profile" aria-label={t.nav.me} className={topBarAvatarClass}>
+            👤
+          </Link>
+        }
+      />
 
       <div className="flex flex-col gap-5 px-5 py-6">
+        <section className="flex gap-4 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
+          <div className="flex-1">
+            <p className="text-xs text-neutral-500">{t.home.currentlySaving}</p>
+            <p className="text-2xl font-semibold text-primary-dark">
+              {summary ? `$${fmt(summary.currentlySaving)}` : "—"}
+            </p>
+          </div>
+          <div className="flex-1 border-l border-neutral-200 pl-4">
+            <p className="text-xs text-neutral-500">{t.home.savedAllTime}</p>
+            <p className="text-2xl font-semibold text-primary-dark">
+              {summary ? `$${fmt(summary.savedAllTime)}` : "—"}
+            </p>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
           <p className="text-sm font-semibold text-primary-dark">{t.home.agentUpdate}</p>
           <p className="mt-1 text-sm text-neutral-600">{t.home.agentUpdateBody}</p>

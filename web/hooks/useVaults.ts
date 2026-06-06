@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
+  getDailyPrize,
   getFriends,
-  getTotalSaved,
+  getSavingsSummary,
   getVault,
   getVaults,
+  type DailyPrize,
   type Friend,
   type SavingsSummary,
   type Vault,
@@ -20,7 +22,7 @@ export function useSavings() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([getVaults(), getTotalSaved()]).then(([vaults, summary]) => {
+    Promise.all([getVaults(), getSavingsSummary()]).then(([vaults, summary]) => {
       if (active) setData({ vaults, summary });
     });
     return () => {
@@ -72,4 +74,21 @@ export function useFriends() {
   }, []);
 
   return { friends: friends ?? [], isLoading: friends === null };
+}
+
+/** Today's prize + this user's odds, for the Prize screen. */
+export function useDailyPrize() {
+  const [prize, setPrize] = useState<DailyPrize | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getDailyPrize().then((p) => {
+      if (active) setPrize(p);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return { prize, isLoading: prize === null };
 }

@@ -20,7 +20,7 @@ export function BottomNav() {
     { href: "/", label: t.nav.mine, icon: "🏦", match: (p) => p === "/" },
     { href: "/create", label: t.nav.create, icon: "➕", match: (p) => p.startsWith("/create") },
     { href: "/friends", label: t.nav.friends, icon: "👥", match: (p) => p.startsWith("/friends") },
-    { href: "/profile", label: t.nav.me, icon: "👤", match: (p) => p.startsWith("/profile") },
+    { href: "/prize", label: t.nav.prize, icon: "🎁", match: (p) => p.startsWith("/prize") },
   ];
 
   return (

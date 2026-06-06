@@ -25,8 +25,16 @@ export type Vault = {
 };
 
 export type SavingsSummary = {
-  totalSaved: number;
+  currentlySaving: number; // sum locked across active vaults right now
+  savedAllTime: number; // cumulative ever saved (incl. past/completed vaults)
   currency: VaultCurrency;
+};
+
+export type DailyPrize = {
+  amountCopm: number; // prize pool, paid in COPm
+  winChancePct: number; // this user's chance of winning today
+  yourEntries: number; // your raffle entries (1 per $1 locked today)
+  totalEntries: number; // everyone's entries today
 };
 
 export type Friend = { id: string; name: string };
@@ -75,10 +83,24 @@ export async function getVault(id: string): Promise<Vault | null> {
   return FAKE_VAULTS.find((v) => v.id === id) ?? null;
 }
 
-export async function getTotalSaved(): Promise<SavingsSummary> {
+export async function getSavingsSummary(): Promise<SavingsSummary> {
   const vaults = await getVaults();
-  const totalSaved = vaults.reduce((sum, v) => sum + v.saved, 0);
-  return { totalSaved, currency: "USD" };
+  const currentlySaving = vaults.reduce((sum, v) => sum + v.saved, 0);
+  // Lifetime total also counts past/completed vaults (stubbed extra for now).
+  const savedAllTime = currentlySaving + 1080;
+  return { currentlySaving, savedAllTime, currency: "USD" };
+}
+
+// Today's weighted-raffle prize (COPm). 1 entry per $1 locked today; stubbed.
+export async function getDailyPrize(): Promise<DailyPrize> {
+  const yourEntries = 320;
+  const totalEntries = 1780;
+  return {
+    amountCopm: 4000,
+    winChancePct: Math.round((yourEntries / totalEntries) * 100),
+    yourEntries,
+    totalEntries,
+  };
 }
 
 export async function getFriends(): Promise<Friend[]> {

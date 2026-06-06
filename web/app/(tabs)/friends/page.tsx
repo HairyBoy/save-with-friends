@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
+import { TopBar, topBarAvatarClass } from "@/components/TopBar";
 import { useFriends } from "@/hooks/useVaults";
 
 // Friends — social feed + pending early-exit approvals.
@@ -11,9 +12,14 @@ export default function FriendsScreen() {
 
   return (
     <div className="flex flex-col">
-      <header className="rounded-b-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-5 pt-10 pb-7 text-white shadow-lg shadow-emerald-600/20">
-        <h1 className="text-xl font-bold">{t.friends.title}</h1>
-      </header>
+      <TopBar
+        title={t.friends.title}
+        right={
+          <Link href="/profile" aria-label={t.nav.me} className={topBarAvatarClass}>
+            👤
+          </Link>
+        }
+      />
 
       <div className="flex flex-col gap-5 px-5 py-6">
         <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">

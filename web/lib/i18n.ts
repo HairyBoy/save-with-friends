@@ -21,7 +21,7 @@ export function isLang(value: unknown): value is Lang {
 }
 
 const en = {
-  nav: { mine: "Mine", create: "Create", friends: "Friends", me: "Me" },
+  nav: { mine: "Mine", create: "Create", friends: "Friends", me: "Me", prize: "Prize" },
 
   onboarding: {
     brand: "Save with Friends",
@@ -32,8 +32,8 @@ const en = {
 
   home: {
     title: "My Vaults",
-    totalSaved: "Total saved",
-    totalAmount: "[ total amount ]",
+    currentlySaving: "Currently saving",
+    savedAllTime: "Saved all time",
     agentUpdate: "Agent's daily update",
     agentUpdateBody: "[ what the agent did today + why ]",
     yourVaults: "Your Vaults",
@@ -112,12 +112,23 @@ const en = {
     support: "Support",
     viewOnboarding: "View onboarding",
   },
+
+  prize: {
+    title: "Prize",
+    prizeToday: "Today's prize",
+    yourChance: "Your chance of winning",
+    entriesLabel: "Your entries",
+    howItWorksTitle: "How it works",
+    howItWorksBody:
+      "Every $1 you keep locked today counts as one entry — the more you save, the better your odds.",
+    drawNote: "Drawn every day at midnight.",
+  },
 };
 
 // Colombian Spanish. Keep keys identical to `en` — the type is derived from `en`,
 // so a missing key here is a compile error.
 const es: typeof en = {
-  nav: { mine: "Mías", create: "Crear", friends: "Amigos", me: "Yo" },
+  nav: { mine: "Mías", create: "Crear", friends: "Amigos", me: "Yo", prize: "Premio" },
 
   onboarding: {
     brand: "Ahorra con Amigos",
@@ -128,8 +139,8 @@ const es: typeof en = {
 
   home: {
     title: "Mis Alcancías",
-    totalSaved: "Total ahorrado",
-    totalAmount: "[ monto total ]",
+    currentlySaving: "Ahorro actual",
+    savedAllTime: "Ahorrado en total",
     agentUpdate: "Resumen diario del agente",
     agentUpdateBody: "[ qué hizo el agente hoy + por qué ]",
     yourVaults: "Tus Alcancías",
@@ -207,6 +218,17 @@ const es: typeof en = {
     terms: "Términos y Privacidad",
     support: "Soporte",
     viewOnboarding: "Ver introducción",
+  },
+
+  prize: {
+    title: "Premio",
+    prizeToday: "Premio de hoy",
+    yourChance: "Tu probabilidad de ganar",
+    entriesLabel: "Tus entradas",
+    howItWorksTitle: "Cómo funciona",
+    howItWorksBody:
+      "Cada $1 que mantienes guardado hoy cuenta como una entrada — entre más ahorras, mejores son tus probabilidades.",
+    drawNote: "Se sortea todos los días a medianoche.",
   },
 };
 
