@@ -72,9 +72,8 @@ export default function CreateVaultScreen() {
     });
   }
 
-  function cancel() {
+  function clearForm() {
     resetVaultDraft();
-    router.push("/");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -104,8 +103,8 @@ export default function CreateVaultScreen() {
       <TopBar
         title={t.create.title}
         left={
-          <button type="button" onClick={cancel} className={topBarActionClass}>
-            {t.create.cancel}
+          <button type="button" onClick={clearForm} className={topBarActionClass}>
+            {t.create.clear}
           </button>
         }
       />

@@ -42,7 +42,7 @@ const en = {
   },
 
   create: {
-    cancel: "Cancel",
+    clear: "Clear",
     title: "Create a Vault",
     iconLabel: "Choose an icon",
     nameLabel: "Name",
@@ -149,7 +149,7 @@ const es: typeof en = {
   },
 
   create: {
-    cancel: "Cancelar",
+    clear: "Limpiar",
     title: "Crear una Alcancía",
     iconLabel: "Elige un ícono",
     nameLabel: "Nombre",
