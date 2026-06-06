@@ -1,22 +1,27 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { SplitMode } from "@/lib/vaults";
 
 export type PresetKey = "1w" | "1m" | "3m" | "custom";
 
 export type VaultDraft = {
+  shared: boolean;
+  splitMode: SplitMode;
   icon: string;
   name: string;
   goal: string;
   deposit: string;
   preset: PresetKey | null;
   deadline: string; // yyyy-mm-dd
-  friends: string[]; // selected friend ids (keyholders)
+  friends: string[]; // solo: keyholders · shared: invited members
 };
 
 export const DEFAULT_ICON = "🔒";
 
 const EMPTY: VaultDraft = {
+  shared: false,
+  splitMode: "equal",
   icon: DEFAULT_ICON,
   name: "",
   goal: "",

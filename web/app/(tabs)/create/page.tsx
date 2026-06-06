@@ -35,11 +35,15 @@ export default function CreateVaultScreen() {
   const router = useRouter();
   const { friends: friendOptions, isLoading: friendsLoading } = useFriends();
   const draft = useVaultDraft();
-  const { icon, name, goal, deposit, preset, deadline, friends } = draft;
+  const { shared, splitMode, icon, name, goal, deposit, preset, deadline, friends } = draft;
 
   const goalNum = Number(goal);
   const depositNum = Number(deposit);
-  const valid = name.trim().length > 0 && goalNum >= GOAL_MIN && depositNum >= DEPOSIT_MIN;
+  const valid =
+    name.trim().length > 0 &&
+    goalNum >= GOAL_MIN &&
+    depositNum >= DEPOSIT_MIN &&
+    (!shared || friends.length > 0); // a shared vault needs at least one invite
   // Flag an amount hint red once something's been typed that isn't a valid amount
   // at/above its minimum (an empty field stays neutral). `!(x >= min)` also catches
   // NaN from non-numeric input.
@@ -124,6 +128,37 @@ export default function CreateVaultScreen() {
             placeholder={t.create.namePlaceholder}
             className={fieldClass}
           />
+        </div>
+
+        {/* Solo or shared */}
+        <div className="flex flex-col gap-2">
+          <p className={labelClass}>{t.create.typeLabel}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setVaultDraft({ shared: false })}
+              aria-pressed={!shared}
+              className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
+                !shared
+                  ? "border-primary bg-primary text-white shadow-sm"
+                  : "border-white/60 bg-white/60 text-neutral-700"
+              }`}
+            >
+              {t.create.typeSolo}
+            </button>
+            <button
+              type="button"
+              onClick={() => setVaultDraft({ shared: true })}
+              aria-pressed={shared}
+              className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
+                shared
+                  ? "border-primary bg-primary text-white shadow-sm"
+                  : "border-white/60 bg-white/60 text-neutral-700"
+              }`}
+            >
+              {t.create.typeShared}
+            </button>
+          </div>
         </div>
 
         {/* Icon */}
@@ -226,7 +261,7 @@ export default function CreateVaultScreen() {
 
         {/* Friends with keys */}
         <div className="flex flex-col gap-2">
-          <p className={labelClass}>{t.create.friendsLabel}</p>
+          <p className={labelClass}>{shared ? t.create.inviteLabel : t.create.friendsLabel}</p>
           <div className="flex flex-wrap gap-2">
             {friendsLoading
               ? [0, 1].map((i) => (
@@ -255,8 +290,43 @@ export default function CreateVaultScreen() {
                   );
                 })}
           </div>
-          <p className="text-xs text-neutral-400">{t.create.friendsHint}</p>
+          <p className="text-xs text-neutral-400">
+            {shared ? t.create.inviteHint : t.create.friendsHint}
+          </p>
         </div>
+
+        {/* Split (shared only) */}
+        {shared && (
+          <div className="flex flex-col gap-2">
+            <p className={labelClass}>{t.create.splitLabel}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setVaultDraft({ splitMode: "equal" })}
+                aria-pressed={splitMode === "equal"}
+                className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
+                  splitMode === "equal"
+                    ? "border-primary bg-primary text-white shadow-sm"
+                    : "border-white/60 bg-white/60 text-neutral-700"
+                }`}
+              >
+                {t.create.splitEqual}
+              </button>
+              <button
+                type="button"
+                onClick={() => setVaultDraft({ splitMode: "contribution" })}
+                aria-pressed={splitMode === "contribution"}
+                className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
+                  splitMode === "contribution"
+                    ? "border-primary bg-primary text-white shadow-sm"
+                    : "border-white/60 bg-white/60 text-neutral-700"
+                }`}
+              >
+                {t.create.splitContribution}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Live preview */}
         <div className="flex flex-col gap-2">
@@ -288,11 +358,21 @@ export default function CreateVaultScreen() {
                 <dd className="font-medium text-neutral-700">{deadlineDisplay ?? "—"}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="shrink-0 text-neutral-500">{t.create.summaryApprovers}</dt>
+                <dt className="shrink-0 text-neutral-500">
+                  {shared ? t.create.inviteLabel : t.create.summaryApprovers}
+                </dt>
                 <dd className="text-right font-medium text-neutral-700">
                   {approverNames.length ? approverNames.join(", ") : t.create.summaryNone}
                 </dd>
               </div>
+              {shared && (
+                <div className="flex justify-between">
+                  <dt className="text-neutral-500">{t.create.splitLabel}</dt>
+                  <dd className="font-medium text-neutral-700">
+                    {splitMode === "equal" ? t.create.splitEqual : t.create.splitContribution}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
           <p className="text-center text-xs text-neutral-500">{t.create.unlockNote}</p>

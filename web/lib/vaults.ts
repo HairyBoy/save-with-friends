@@ -11,17 +11,35 @@
 
 export type VaultCurrency = "USD";
 
+export type SplitMode = "equal" | "contribution";
+
+// The current user's id within a shared vault's member list.
+export const CURRENT_USER_ID = "me";
+
+export type VaultMember = {
+  id: string; // friend id; the current user is CURRENT_USER_ID
+  name: string;
+  contributed: number; // how much this member has put in
+  accepted: boolean; // false = invited but hasn't joined yet
+};
+
 export type Vault = {
   id: string;
   name: string;
   icon: string; // emoji chosen at creation
-  goal: number; // target amount
-  saved: number; // currently locked
+  goal: number; // target amount (the shared goal, for shared vaults)
+  saved: number; // currently locked (for shared = sum of member contributions)
   currency: VaultCurrency;
   deadline: string | null; // ISO yyyy-mm-dd unlock date (the timer); null = no timer
-  keyholders: string[]; // friend ids who can approve an early unlock
   yieldEarned: number; // earned by the agent while locked
   createdAt: string; // ISO yyyy-mm-dd
+  shared: boolean;
+  keyholders?: string[]; // solo: friend ids who can approve an early unlock
+  // Shared-only:
+  splitMode?: SplitMode; // how funds split when the vault unlocks
+  members?: VaultMember[]; // contributors (incl. the owner); all must unlock
+  inviteStatus?: "accepted" | "pending"; // current user's status on this shared vault
+  ownerName?: string; // who created it / sent the invite (shown on pending)
 };
 
 export type SavingsSummary = {
@@ -58,6 +76,7 @@ const FAKE_VAULTS: Vault[] = [
     keyholders: ["ana"],
     yieldEarned: 4.2,
     createdAt: "2026-05-10",
+    shared: false,
   },
   {
     id: "2",
@@ -70,6 +89,7 @@ const FAKE_VAULTS: Vault[] = [
     keyholders: ["luis"],
     yieldEarned: 6.85,
     createdAt: "2026-04-22",
+    shared: false,
   },
 ];
 
