@@ -7,6 +7,7 @@
 
 import {
   createPublicClient,
+  createTestClient,
   createWalletClient,
   defineChain,
   http,
@@ -64,4 +65,16 @@ export function getDevWalletClient() {
     chain: activeChain,
     transport: http(ACTIVE_RPC),
   });
+}
+
+// True only on the local Anvil chain — gates dev-only affordances (time travel).
+export const isLocalChain = activeChain.id === anvil.id;
+
+// A test client that can drive Anvil's clock. Local-only: the test RPC methods
+// (evm_increaseTime/evm_mine) exist only on a dev node, never on a real chain.
+export function getDevTestClient() {
+  if (!isLocalChain) {
+    throw new Error("time travel is local-only (Anvil test RPC)");
+  }
+  return createTestClient({ chain: activeChain, mode: "anvil", transport: http(ACTIVE_RPC) });
 }

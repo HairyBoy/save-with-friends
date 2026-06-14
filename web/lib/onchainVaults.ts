@@ -6,7 +6,12 @@
 // this file should touch wei or ABIs.
 
 import { erc20Abi, parseEventLogs, type Address, type Hash } from "viem";
-import { CONTRACTS, getDevWalletClient, getPublicClient } from "@/lib/chains";
+import {
+  CONTRACTS,
+  getDevTestClient,
+  getDevWalletClient,
+  getPublicClient,
+} from "@/lib/chains";
 import { savingsVaultsAbi } from "@/lib/savingsVaultsAbi";
 
 // The vault struct as the contract returns it (getVault).
@@ -64,6 +69,15 @@ export async function readTokenBalance(owner: Address): Promise<bigint> {
     functionName: "balanceOf",
     args: [owner],
   });
+}
+
+/**
+ * The chain's current block timestamp (unix seconds). The contract enforces
+ * deadlines against block.timestamp, not wall-clock time — so deadlines must be
+ * anchored to this, especially when dev time-travel has pushed the chain ahead.
+ */
+export async function readChainNow(): Promise<bigint> {
+  return (await getPublicClient().getBlock()).timestamp;
 }
 
 /** Keyholder addresses for a vault (display only). */
@@ -155,6 +169,17 @@ export async function withdraw(id: bigint): Promise<void> {
     args: [id],
   });
   await send(hash);
+}
+
+/**
+ * DEV-ONLY: push the local chain's clock forward `seconds` and mine a block, so
+ * timer-locked vaults cross their deadline and unlock. No-op'd on a real chain by
+ * the guard in getDevTestClient.
+ */
+export async function advanceChainTime(seconds: number): Promise<void> {
+  const test = getDevTestClient();
+  await test.increaseTime({ seconds });
+  await test.mine({ blocks: 1 });
 }
 
 /** A keyholder approves an early exit. */

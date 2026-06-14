@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getBalances,
   getDailyPrize,
@@ -9,6 +9,7 @@ import {
   getVault,
   getVaults,
   getWalletBalance,
+  isVaultUnlocked,
   type DailyPrize,
   type Friend,
   type SavingsSummary,
@@ -39,9 +40,10 @@ export function useSavings() {
   };
 }
 
-/** Spendable wallet balance (USD) — null while loading. */
+/** Spendable wallet balance (USD) — null while loading. `reload()` refetches. */
 export function useWalletBalance() {
   const [balance, setBalance] = useState<number | null>(null);
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -51,9 +53,10 @@ export function useWalletBalance() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [nonce]);
 
-  return { balance, isLoading: balance === null };
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  return { balance, isLoading: balance === null, reload };
 }
 
 /** Personal-vault + shared-receiving + wallet + total (USD) — for the Me page. */
@@ -78,26 +81,30 @@ export function useBalances() {
   return { balances, isLoading: balances === null };
 }
 
-/** A single vault by id, for the detail screen. */
+/** A single vault by id (+ its live unlock state), for the detail screen.
+ *  `reload()` refetches after a deposit/withdraw/time-travel changes the chain. */
 export function useVault(id: string) {
   // One state object set once in the async callback (avoids a synchronous
   // setState in the effect, which the react-hooks lint flags as cascading).
-  const [state, setState] = useState<{ vault: Vault | null; isLoading: boolean }>({
-    vault: null,
-    isLoading: true,
-  });
+  const [state, setState] = useState<{
+    vault: Vault | null;
+    unlocked: boolean;
+    isLoading: boolean;
+  }>({ vault: null, unlocked: false, isLoading: true });
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let active = true;
-    getVault(id).then((vault) => {
-      if (active) setState({ vault, isLoading: false });
+    Promise.all([getVault(id), isVaultUnlocked(id)]).then(([vault, unlocked]) => {
+      if (active) setState({ vault, unlocked, isLoading: false });
     });
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, nonce]);
 
-  return state;
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  return { ...state, reload };
 }
 
 /** The user's friends (the social graph), for the Friends screen. */

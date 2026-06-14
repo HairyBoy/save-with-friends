@@ -13,19 +13,24 @@
 // wei<->USD conversion is hidden in this file.
 
 import { formatUnits, parseUnits, type Address } from "viem";
-import { devAccount, TOKEN_DECIMALS } from "@/lib/chains";
+import { devAccount, isLocalChain, TOKEN_DECIMALS } from "@/lib/chains";
 import {
+  advanceChainTime,
   createSoloVault as createSoloVaultOnchain,
   deposit as depositOnchain,
   withdraw as withdrawOnchain,
   approveEarlyExit as approveEarlyExitOnchain,
   approveToken,
+  readChainNow,
   readOwnerVaultIds,
   readTokenBalance,
   readUnlocked,
   readVault,
   type OnchainVault,
 } from "@/lib/onchainVaults";
+
+// Whether dev-only affordances (the time-travel panel) should be available.
+export const IS_DEV_CHAIN = isLocalChain;
 
 export type VaultCurrency = "USD";
 
@@ -341,10 +346,34 @@ export type NewVaultInput = {
 
 let nextSharedId = 100;
 
-// Convert a required "yyyy-mm-dd" timer to a unix deadline (end of that day, so
-// it's safely in the future). The contract requires deadline > now.
-function deadlineToUnix(deadline: string): bigint {
-  return BigInt(Math.floor(new Date(`${deadline}T23:59:59`).getTime() / 1000));
+// Smallest gap (seconds) we leave between the on-chain deadline and the chain's
+// "now", so a freshly-created vault is always strictly in the future even if the
+// user picked today (or the clocks line up exactly).
+const MIN_DEADLINE_BUFFER_SECONDS = 60;
+
+// Convert a required "yyyy-mm-dd" timer to a unix deadline the contract accepts.
+//
+// We anchor to the CHAIN's clock, not the browser's. The contract enforces
+// deadline > block.timestamp, and the dev time-travel panel (evm_increaseTime)
+// permanently advances block.timestamp — so on a fast-forwarded chain a plain
+// wall-clock deadline ("3 months from now") can land in the chain's PAST and the
+// create reverts with "deadline<=now". To stay correct in both worlds we take
+// the user's intended DURATION (chosen date − wall-clock now) and apply it to
+// chain time: deadline = chainNow + duration (floored to a small buffer). On a
+// live chain block.timestamp ≈ wall clock, so this resolves to ~the user's
+// chosen date; it only diverges when dev time-travel has moved the chain ahead.
+async function deadlineToUnix(deadline: string): Promise<bigint> {
+  // End of the chosen day, so the timer is safely late in the day.
+  const chosenWallUnix = BigInt(
+    Math.floor(new Date(`${deadline}T23:59:59`).getTime() / 1000),
+  );
+  const wallNow = BigInt(Math.floor(Date.now() / 1000));
+  // The user's intended duration from "now" (never negative).
+  const duration = chosenWallUnix > wallNow ? chosenWallUnix - wallNow : 0n;
+  const chainNow = await readChainNow();
+  const buffer = BigInt(MIN_DEADLINE_BUFFER_SECONDS);
+  // Anchor to chain time, but never less than a small buffer in the future.
+  return chainNow + (duration > buffer ? duration : buffer);
 }
 
 // Create a vault. Solo → real on-chain create + initial deposit; shared → stub.
@@ -391,7 +420,7 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
   // addresses; goal/deadline unlock paths already work.
   const id = await createSoloVaultOnchain({
     goal: parseUnits(String(input.goal), TOKEN_DECIMALS),
-    deadline: deadlineToUnix(input.deadline),
+    deadline: await deadlineToUnix(input.deadline),
     deposit: parseUnits(String(input.deposit), TOKEN_DECIMALS),
     keyholders: [],
   });
@@ -431,6 +460,11 @@ export async function requestEarlyExit(id: string): Promise<void> {
 export async function isVaultUnlocked(id: string): Promise<boolean> {
   if (id.startsWith("shared-")) return false; // shared unlock is a v2 concern
   return readUnlocked(BigInt(id));
+}
+
+/** DEV-ONLY: jump the local chain forward N days (to watch timer vaults unlock). */
+export async function devFastForward(days: number): Promise<void> {
+  await advanceChainTime(days * 24 * 60 * 60);
 }
 
 // Accept a pending shared-vault invite (you become an accepted member).
