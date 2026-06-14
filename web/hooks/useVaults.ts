@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import {
+  getBalances,
   getDailyPrize,
   getFriends,
   getSavingsSummary,
   getVault,
   getVaults,
+  getWalletBalance,
   type DailyPrize,
   type Friend,
   type SavingsSummary,
@@ -35,6 +37,45 @@ export function useSavings() {
     summary: data?.summary ?? null,
     isLoading: data === null,
   };
+}
+
+/** Spendable wallet balance (USD) — null while loading. */
+export function useWalletBalance() {
+  const [balance, setBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getWalletBalance().then((b) => {
+      if (active) setBalance(b);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return { balance, isLoading: balance === null };
+}
+
+/** Personal-vault + shared-receiving + wallet + total (USD) — for the Me page. */
+export function useBalances() {
+  const [balances, setBalances] = useState<{
+    personal: number;
+    sharedReceiving: number;
+    wallet: number;
+    total: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getBalances().then((b) => {
+      if (active) setBalances(b);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return { balances, isLoading: balances === null };
 }
 
 /** A single vault by id, for the detail screen. */

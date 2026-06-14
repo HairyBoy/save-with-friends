@@ -1,13 +1,31 @@
-// Data-access layer for Vaults.
+// Data-access layer for Vaults — the seam every screen reads through.
 //
-// Stubbed with fake data for now, BUT every function is async (Promise-returning)
-// so the real implementation can drop in on-chain reads (viem against the
-// savings-lock contract) or a backend without touching any call site. UI-facing
-// types use plain numbers (human USD); the future on-chain impl will read raw
-// bigints and `formatUnits` them here, hiding chain details from the UI.
+// SOLO vaults are now REAL on-chain (SavingsVaults on the local Anvil chain):
+// reads come from the contract, writes go through the dev wallet (see lib/chains).
+// SHARED vaults are still an in-memory stub — the contract is solo-only (shared is
+// v2). The two coexist: the UI groups them by the `shared` flag, and their ids live
+// in separate spaces (on-chain solo = numeric "1","2"…; shared stub = "shared-…")
+// so they never collide.
 //
-// A `userAddress` will be threaded in later (from `useMiniPay`) once reads are
-// scoped to the connected wallet; the stub is the same for everyone for now.
+// The contract doesn't store a vault's name/emoji (kept lean by design), so that
+// metadata lives in localStorage keyed by vault id — per-device for now, moving to
+// a backend later. UI-facing types stay plain numbers (human USD); the on-chain
+// wei<->USD conversion is hidden in this file.
+
+import { formatUnits, parseUnits, type Address } from "viem";
+import { devAccount, TOKEN_DECIMALS } from "@/lib/chains";
+import {
+  createSoloVault as createSoloVaultOnchain,
+  deposit as depositOnchain,
+  withdraw as withdrawOnchain,
+  approveEarlyExit as approveEarlyExitOnchain,
+  approveToken,
+  readOwnerVaultIds,
+  readTokenBalance,
+  readUnlocked,
+  readVault,
+  type OnchainVault,
+} from "@/lib/onchainVaults";
 
 export type VaultCurrency = "USD";
 
@@ -57,42 +75,86 @@ export type DailyPrize = {
 
 export type Friend = { id: string; name: string };
 
-// --- Fake data (mirrors what the UI showed, with realistic numbers) ---------
+// The connected user's address. For now it's the Anvil dev account (everything is
+// owned by / read for that account); becomes the MiniPay wallet address later.
+function currentUser(): Address {
+  return devAccount.address;
+}
+
+// --- off-chain vault metadata (name/emoji/created/keyholder picks) ----------
+// localStorage-backed, keyed by on-chain vault id. Per-device for now.
+
+type VaultMeta = {
+  name: string;
+  icon: string;
+  createdAt: string; // ISO yyyy-mm-dd
+  keyholderFriendIds: string[]; // the friends the owner picked (display only for now)
+};
+
+const META_PREFIX = "vault-meta:";
+
+function readMeta(id: string): VaultMeta | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(META_PREFIX + id);
+  return raw ? (JSON.parse(raw) as VaultMeta) : null;
+}
+
+function writeMeta(id: string, meta: VaultMeta): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(META_PREFIX + id, JSON.stringify(meta));
+}
+
+// --- on-chain solo vault <-> UI Vault ---------------------------------------
+
+function unixToIsoDate(unix: bigint): string {
+  return new Date(Number(unix) * 1000).toISOString().slice(0, 10);
+}
+
+function toUsd(wei: bigint): number {
+  return Number(formatUnits(wei, TOKEN_DECIMALS));
+}
+
+// Map an on-chain solo vault (+ its localStorage metadata) into the UI shape.
+function mapSoloVault(id: bigint, v: OnchainVault): Vault {
+  const idStr = id.toString();
+  const meta = readMeta(idStr);
+  return {
+    id: idStr,
+    name: meta?.name ?? "Vault",
+    icon: meta?.icon ?? "🔒",
+    goal: toUsd(v.goal),
+    saved: toUsd(v.saved),
+    currency: "USD",
+    deadline: unixToIsoDate(v.deadline),
+    yieldEarned: 0, // no yield in v1
+    createdAt: meta?.createdAt ?? unixToIsoDate(v.deadline),
+    shared: false,
+    keyholders: meta?.keyholderFriendIds ?? [],
+  };
+}
+
+// Read every (non-closed) solo vault the current user owns, newest first.
+async function getOnchainSoloVaults(): Promise<Vault[]> {
+  const ids = await readOwnerVaultIds(currentUser());
+  const vaults = await Promise.all(
+    ids.map(async (id) => {
+      const v = await readVault(id);
+      return v.closed ? null : mapSoloVault(id, v);
+    }),
+  );
+  return vaults.filter((v): v is Vault => v !== null).reverse();
+}
+
+// --- shared vaults (in-memory stub; ids namespaced "shared-…") --------------
 
 const FAKE_FRIENDS: Friend[] = [
   { id: "ana", name: "Ana" },
   { id: "luis", name: "Luis" },
 ];
 
-let FAKE_VAULTS: Vault[] = [
+let SHARED_VAULTS: Vault[] = [
   {
-    id: "1",
-    name: "Trip to Cartagena",
-    icon: "✈️",
-    goal: 500,
-    saved: 320,
-    currency: "USD",
-    deadline: "2026-09-01",
-    keyholders: ["ana"],
-    yieldEarned: 4.2,
-    createdAt: "2026-05-10",
-    shared: false,
-  },
-  {
-    id: "2",
-    name: "New laptop",
-    icon: "💻",
-    goal: 1200,
-    saved: 450,
-    currency: "USD",
-    deadline: "2026-12-15",
-    keyholders: ["luis"],
-    yieldEarned: 6.85,
-    createdAt: "2026-04-22",
-    shared: false,
-  },
-  {
-    id: "3",
+    id: "shared-1",
     name: "Beach house",
     icon: "🏠",
     goal: 2000,
@@ -112,7 +174,7 @@ let FAKE_VAULTS: Vault[] = [
     ],
   },
   {
-    id: "4",
+    id: "shared-2",
     name: "Sofía's birthday gift",
     icon: "🎁",
     goal: 300,
@@ -133,29 +195,119 @@ let FAKE_VAULTS: Vault[] = [
   },
 ];
 
-// --- "API" — async so the swap to real chain/backend reads is drop-in -------
+// --- public API (signatures unchanged; solo is on-chain, shared is stub) ----
 
 export async function getVaults(): Promise<Vault[]> {
-  return FAKE_VAULTS;
+  const solo = await getOnchainSoloVaults();
+  return [...solo, ...SHARED_VAULTS];
 }
 
 export async function getVault(id: string): Promise<Vault | null> {
-  return FAKE_VAULTS.find((v) => v.id === id) ?? null;
+  // Shared stub ids are non-numeric ("shared-…"); on-chain solo ids are numeric.
+  if (id.startsWith("shared-")) {
+    return SHARED_VAULTS.find((v) => v.id === id) ?? null;
+  }
+  const v = await readVault(BigInt(id));
+  if (v.owner === "0x0000000000000000000000000000000000000000") return null; // no such vault
+  return mapSoloVault(BigInt(id), v);
 }
 
-// The current user's own stake in a vault: the full amount for a solo vault,
-// their member contribution for an accepted shared vault, nothing for a pending
-// invite (you haven't joined yet).
-function myAmount(v: Vault): number {
+/**
+ * What `memberId` receives from a vault when it unlocks (USD), by its split mode:
+ * by-contribution → each member gets their own contribution back; equal → the pot
+ * is divided across the accepted members. Principal only — yield shows separately.
+ * Single seam for "what everyone gets back": the vault card's Receives column and
+ * the Me page's "receiving from shared" both read it, so they always agree.
+ * (Solo vaults: you receive your whole balance.)
+ */
+export function vaultPayout(v: Vault, memberId: string): number {
   if (!v.shared) return v.saved;
-  if (v.inviteStatus !== "accepted") return 0;
-  return v.members?.find((m) => m.id === CURRENT_USER_ID)?.contributed ?? 0;
+  const members = v.members ?? [];
+  if (v.splitMode === "equal") {
+    const sharers = members.filter((m) => m.accepted);
+    if (!sharers.some((m) => m.id === memberId)) return 0; // not (yet) sharing
+    return sharers.length > 0 ? v.saved / sharers.length : 0;
+  }
+  // by contribution (default): you get back what you put in
+  return members.find((m) => m.id === memberId)?.contributed ?? 0;
+}
+
+/** Spendable money in the user's wallet (USD) — what deposits draw from. */
+export async function getWalletBalance(): Promise<number> {
+  return toUsd(await readTokenBalance(currentUser()));
+}
+
+/** The user's stake locked in REAL on-chain (solo) vaults (USD). */
+export async function getSoloVaultedBalance(): Promise<number> {
+  const solo = await getOnchainSoloVaults();
+  return solo.reduce((sum, v) => sum + v.saved, 0);
+}
+
+/**
+ * What the user will receive across their (accepted) shared vaults (USD) — their
+ * payout. Under by-contribution this equals what they put in; under equal split
+ * it may not. Stub data for now (shared is v2), but a single seam: swap the body
+ * for a real on-chain read later and every caller updates at once.
+ */
+export async function getSharedReceiving(): Promise<number> {
+  return SHARED_VAULTS.filter((v) => v.inviteStatus === "accepted").reduce(
+    (sum, v) => sum + vaultPayout(v, CURRENT_USER_ID),
+    0,
+  );
+}
+
+/**
+ * The full pooled total across the user's (accepted) shared vaults — EVERYONE's
+ * money, not just the user's slice. Same stub seam as above. The home "currently
+ * saving" figure counts this whole group pot; the Me page counts only your slice
+ * (getSharedVaultedBalance). Pending invites you haven't joined aren't counted.
+ */
+export async function getSharedGroupTotal(): Promise<number> {
+  return SHARED_VAULTS.filter((v) => v.inviteStatus === "accepted").reduce(
+    (sum, v) => sum + v.saved,
+    0,
+  );
+}
+
+/**
+ * The user's money broken out for the Me page: what's in your personal (solo)
+ * vaults, what you'll receive from shared vaults, and what's still spendable in
+ * your wallet — which sum to your total.
+ * Caveat while shared vaults are stub data: the shared slice isn't backed by real
+ * on-chain escrow, so `total` runs ahead of the real wallet by that stubbed
+ * amount until shared vaults go on-chain (then it reconciles).
+ */
+export async function getBalances(): Promise<{
+  personal: number;
+  sharedReceiving: number;
+  wallet: number;
+  total: number;
+}> {
+  const [personal, sharedReceiving, wallet] = await Promise.all([
+    getSoloVaultedBalance(),
+    getSharedReceiving(),
+    getWalletBalance(),
+  ]);
+  return {
+    personal,
+    sharedReceiving,
+    wallet,
+    total: personal + sharedReceiving + wallet,
+  };
 }
 
 export async function getSavingsSummary(): Promise<SavingsSummary> {
-  const vaults = await getVaults();
-  const currentlySaving = vaults.reduce((sum, v) => sum + myAmount(v), 0);
-  // Lifetime total also counts past/completed vaults (stubbed extra for now).
+  // "Currently saving" is the collective figure: your own money from solo vaults
+  // PLUS the full pooled total of the group vaults you're in (everyone's money,
+  // not just your slice). This differs on purpose from the Me page, which counts
+  // only your personal stake + your own shared payout (getBalances).
+  const [solo, groupTotal] = await Promise.all([
+    getSoloVaultedBalance(),
+    getSharedGroupTotal(),
+  ]);
+  const currentlySaving = solo + groupTotal;
+  // Lifetime total also counts past/completed vaults (stubbed extra until we
+  // track withdrawn-vault history on-chain).
   const savedAllTime = currentlySaving + 1080;
   return { currentlySaving, savedAllTime, currency: "USD" };
 }
@@ -187,47 +339,103 @@ export type NewVaultInput = {
   friendIds: string[]; // solo: keyholders · shared: invited members
 };
 
-let nextVaultId = 100;
+let nextSharedId = 100;
 
-// Create a vault. The stub appends to the in-memory list (survives navigation,
-// resets on reload), so a vault you create shows up on the home screen.
+// Convert a required "yyyy-mm-dd" timer to a unix deadline (end of that day, so
+// it's safely in the future). The contract requires deadline > now.
+function deadlineToUnix(deadline: string): bigint {
+  return BigInt(Math.floor(new Date(`${deadline}T23:59:59`).getTime() / 1000));
+}
+
+// Create a vault. Solo → real on-chain create + initial deposit; shared → stub.
 export async function createVault(input: NewVaultInput): Promise<Vault> {
-  const base = {
-    id: String(nextVaultId++),
+  if (!input.deadline) {
+    throw new Error("a deadline is required"); // the form enforces this; belt-and-suspenders
+  }
+
+  if (input.shared) {
+    // --- shared stub (in-memory) ---
+    const id = `shared-${nextSharedId++}`;
+    const vault: Vault = {
+      id,
+      name: input.name,
+      icon: input.icon,
+      goal: input.goal,
+      saved: input.deposit,
+      currency: "USD",
+      deadline: input.deadline,
+      yieldEarned: 0,
+      createdAt: new Date().toISOString().slice(0, 10),
+      shared: true,
+      splitMode: input.splitMode,
+      ownerName: "You",
+      inviteStatus: "accepted",
+      members: [
+        { id: CURRENT_USER_ID, name: "You", contributed: input.deposit, accepted: true },
+        ...input.friendIds.map((fid) => ({
+          id: fid,
+          name: FAKE_FRIENDS.find((f) => f.id === fid)?.name ?? fid,
+          contributed: 0,
+          accepted: false,
+        })),
+      ],
+    };
+    SHARED_VAULTS = [...SHARED_VAULTS, vault];
+    return vault;
+  }
+
+  // --- solo: real on-chain create (approve → createVault → deposit) ---
+  // Keyholders are passed empty on-chain for now: app friends have no on-chain
+  // address yet (the social graph is off-chain), so the picks are saved as display
+  // metadata only. The early-exit approval flow becomes real once friends carry
+  // addresses; goal/deadline unlock paths already work.
+  const id = await createSoloVaultOnchain({
+    goal: parseUnits(String(input.goal), TOKEN_DECIMALS),
+    deadline: deadlineToUnix(input.deadline),
+    deposit: parseUnits(String(input.deposit), TOKEN_DECIMALS),
+    keyholders: [],
+  });
+
+  const idStr = id.toString();
+  writeMeta(idStr, {
     name: input.name,
     icon: input.icon,
-    goal: input.goal,
-    saved: input.deposit,
-    currency: "USD" as const,
-    deadline: input.deadline,
-    yieldEarned: 0,
     createdAt: new Date().toISOString().slice(0, 10),
-  };
-  const vault: Vault = input.shared
-    ? {
-        ...base,
-        shared: true,
-        splitMode: input.splitMode,
-        ownerName: "You",
-        inviteStatus: "accepted",
-        members: [
-          { id: CURRENT_USER_ID, name: "You", contributed: input.deposit, accepted: true },
-          ...input.friendIds.map((fid) => ({
-            id: fid,
-            name: FAKE_FRIENDS.find((f) => f.id === fid)?.name ?? fid,
-            contributed: 0,
-            accepted: false,
-          })),
-        ],
-      }
-    : { ...base, shared: false, keyholders: input.friendIds };
-  FAKE_VAULTS = [...FAKE_VAULTS, vault];
-  return vault;
+    keyholderFriendIds: input.friendIds,
+  });
+
+  const v = await readVault(id);
+  return mapSoloVault(id, v);
+}
+
+// --- solo vault actions (on-chain) — for the detail screen's buttons --------
+
+/** Add funds to a solo vault (approve then deposit). `amount` is human USD. */
+export async function depositToVault(id: string, amount: number): Promise<void> {
+  const wei = parseUnits(String(amount), TOKEN_DECIMALS);
+  await approveToken(wei);
+  await depositOnchain(BigInt(id), wei);
+}
+
+/** Withdraw a solo vault once it's unlocked (closes it). */
+export async function withdrawVault(id: string): Promise<void> {
+  await withdrawOnchain(BigInt(id));
+}
+
+/** A keyholder approves an early exit on a solo vault. */
+export async function requestEarlyExit(id: string): Promise<void> {
+  await approveEarlyExitOnchain(BigInt(id));
+}
+
+/** Live unlock check for a solo vault (goal/deadline/approvals). */
+export async function isVaultUnlocked(id: string): Promise<boolean> {
+  if (id.startsWith("shared-")) return false; // shared unlock is a v2 concern
+  return readUnlocked(BigInt(id));
 }
 
 // Accept a pending shared-vault invite (you become an accepted member).
 export async function acceptInvite(id: string): Promise<void> {
-  const vault = FAKE_VAULTS.find((v) => v.id === id);
+  const vault = SHARED_VAULTS.find((v) => v.id === id);
   if (vault?.shared && vault.inviteStatus === "pending") {
     vault.inviteStatus = "accepted";
     const me = vault.members?.find((m) => m.id === CURRENT_USER_ID);
@@ -237,5 +445,5 @@ export async function acceptInvite(id: string): Promise<void> {
 
 // Decline a pending invite (drop it from your list).
 export async function declineInvite(id: string): Promise<void> {
-  FAKE_VAULTS = FAKE_VAULTS.filter((v) => v.id !== id);
+  SHARED_VAULTS = SHARED_VAULTS.filter((v) => v.id !== id);
 }

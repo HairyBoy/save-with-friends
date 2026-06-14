@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
-import { useFriends } from "@/hooks/useVaults";
+import { useFriends, useWalletBalance } from "@/hooks/useVaults";
 import { createVault } from "@/lib/vaults";
 import {
   resetVaultDraft,
@@ -35,15 +36,24 @@ export default function CreateVaultScreen() {
   const { t, lang } = useLanguage();
   const router = useRouter();
   const { friends: friendOptions, isLoading: friendsLoading } = useFriends();
+  const { balance } = useWalletBalance();
   const draft = useVaultDraft();
   const { shared, splitMode, icon, name, goal, deposit, preset, deadline, friends } = draft;
 
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const goalNum = Number(goal);
   const depositNum = Number(deposit);
+  // The starting amount is pulled from the wallet at create time, so it can't
+  // exceed what's there (while the balance is still loading, don't block).
+  const overBalance = balance !== null && depositNum > balance;
   const valid =
     name.trim().length > 0 &&
     goalNum >= GOAL_MIN &&
     depositNum >= DEPOSIT_MIN &&
+    !overBalance &&
+    deadline.trim().length > 0 && // the timer is required (the contract enforces a deadline)
     (!shared || friends.length > 0); // a shared vault needs at least one invite
   // Flag an amount hint red once something's been typed that isn't a valid amount
   // at/above its minimum (an empty field stays neutral). `!(x >= min)` also catches
@@ -83,20 +93,28 @@ export default function CreateVaultScreen() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!valid) return;
-    await createVault({
-      name: name.trim(),
-      icon,
-      goal: goalNum,
-      deposit: depositNum,
-      deadline: deadline || null,
-      shared,
-      splitMode,
-      friendIds: friends,
-    });
-    // TODO: replace this stub with the real on-chain create + initial deposit.
-    resetVaultDraft();
-    router.push("/");
+    if (!valid || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      // Solo vaults create on-chain (approve → createVault → deposit); shared is
+      // still an in-memory stub. Either way the call shape is the same.
+      await createVault({
+        name: name.trim(),
+        icon,
+        goal: goalNum,
+        deposit: depositNum,
+        deadline: deadline || null,
+        shared,
+        splitMode,
+        friendIds: friends,
+      });
+      resetVaultDraft();
+      router.push("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.create.submitError);
+      setSubmitting(false);
+    }
   }
 
   const presets: { key: PresetKey; label: string }[] = [
@@ -234,9 +252,16 @@ export default function CreateVaultScreen() {
             />
             <span className="text-xs font-semibold text-neutral-400">{t.create.goalCurrency}</span>
           </div>
-          <p className={`text-xs ${depositInvalid ? "text-red-500" : "text-neutral-400"}`}>
-            {t.create.depositHint}
-          </p>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className={`text-xs ${depositInvalid || overBalance ? "text-red-500" : "text-neutral-400"}`}>
+              {overBalance ? t.create.insufficientFunds : t.create.depositHint}
+            </p>
+            {balance !== null && (
+              <p className={`shrink-0 text-xs ${overBalance ? "text-red-500" : "text-neutral-400"}`}>
+                {t.create.available}: ${fmt(balance)}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Unlock timer */}
@@ -388,12 +413,18 @@ export default function CreateVaultScreen() {
           <p className="text-center text-xs text-neutral-500">{t.create.unlockNote}</p>
         </div>
 
+        {error && (
+          <p className="rounded-2xl border border-red-200 bg-red-50/70 px-4 py-3 text-center text-sm text-red-600">
+            {error}
+          </p>
+        )}
+
         <button
           type="submit"
-          disabled={!valid}
+          disabled={!valid || submitting}
           className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 text-center text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
         >
-          {t.create.submit}
+          {submitting ? t.create.submitting : t.create.submit}
         </button>
       </form>
     </div>

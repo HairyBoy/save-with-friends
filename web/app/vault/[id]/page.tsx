@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useVault } from "@/hooks/useVaults";
-import { acceptInvite, declineInvite } from "@/lib/vaults";
+import { acceptInvite, declineInvite, vaultPayout } from "@/lib/vaults";
 
 // Vault detail (full-screen push, no tab bar). Shared vaults show their members
 // and split mode; a pending invite shows the details + Accept / Decline.
@@ -55,18 +55,22 @@ export default function VaultDetailScreen() {
           <p className="mt-2 text-xs font-medium text-neutral-500">{pct}%</p>
         </section>
 
-        {/* Members + split (shared only) */}
+        {/* Members + split (shared only): who put in what, and what they receive */}
         {vault?.shared && vault.members && (
           <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">{t.vaultDetail.members}</p>
-              <p className="text-xs font-medium text-neutral-500">
-                {vault.splitMode === "equal" ? t.create.splitEqual : t.create.splitContribution}
-              </p>
+            <p className="text-sm font-semibold">{t.vaultDetail.members}</p>
+            {/* Column headers */}
+            <div className="mt-3 grid grid-cols-[1fr_auto_auto] items-center gap-x-4 text-xs font-medium text-neutral-400">
+              <span />
+              <span className="w-20 text-right">{t.vaultDetail.contributions}</span>
+              <span className="w-20 text-right">{t.vaultDetail.receives}</span>
             </div>
-            <ul className="mt-2 flex flex-col gap-1.5">
+            <ul className="mt-1.5 flex flex-col gap-1.5">
               {vault.members.map((m) => (
-                <li key={m.id} className="flex items-center justify-between text-sm">
+                <li
+                  key={m.id}
+                  className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 text-sm"
+                >
                   <span className="flex items-center gap-1.5 text-neutral-700">
                     {m.name}
                     {!m.accepted && (
@@ -75,7 +79,10 @@ export default function VaultDetailScreen() {
                       </span>
                     )}
                   </span>
-                  <span className="font-medium text-neutral-600">${fmt(m.contributed)}</span>
+                  <span className="w-20 text-right text-neutral-500">${fmt(m.contributed)}</span>
+                  <span className="w-20 text-right font-medium text-primary-dark">
+                    ${fmt(vaultPayout(vault, m.id))}
+                  </span>
                 </li>
               ))}
             </ul>
