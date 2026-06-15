@@ -6,6 +6,7 @@ import {
   getDailyPrize,
   getFriends,
   getSavingsSummary,
+  getChainNow,
   getVault,
   getVaults,
   getWalletBalance,
@@ -89,15 +90,18 @@ export function useVault(id: string) {
   const [state, setState] = useState<{
     vault: Vault | null;
     unlocked: boolean;
+    chainNow: number; // chain clock (unix s) — real or simulated; 0 while loading
     isLoading: boolean;
-  }>({ vault: null, unlocked: false, isLoading: true });
+  }>({ vault: null, unlocked: false, chainNow: 0, isLoading: true });
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getVault(id), isVaultUnlocked(id)]).then(([vault, unlocked]) => {
-      if (active) setState({ vault, unlocked, isLoading: false });
-    });
+    Promise.all([getVault(id), isVaultUnlocked(id), getChainNow()]).then(
+      ([vault, unlocked, chainNow]) => {
+        if (active) setState({ vault, unlocked, chainNow, isLoading: false });
+      },
+    );
     return () => {
       active = false;
     };

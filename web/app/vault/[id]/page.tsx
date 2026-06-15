@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
-import { useVault, useWalletBalance } from "@/hooks/useVaults";
+import { useFriends, useVault, useWalletBalance } from "@/hooks/useVaults";
 import {
   acceptInvite,
   declineInvite,
@@ -29,8 +29,9 @@ export default function VaultDetailScreen() {
   const { t, lang } = useLanguage();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { vault, unlocked, isLoading, reload } = useVault(id);
+  const { vault, unlocked, chainNow, isLoading, reload } = useVault(id);
   const { balance, reload: reloadWallet } = useWalletBalance();
+  const { friends } = useFriends();
 
   const [depositing, setDepositing] = useState(false);
   const [amount, setAmount] = useState("");
@@ -40,7 +41,29 @@ export default function VaultDetailScreen() {
 
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
+  const fmtDateTime = (ms: number) =>
+    new Date(ms).toLocaleString(numLocale, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  // The exact unlock-by moment (the timer). Solo vaults carry a precise unix
+  // timestamp; the shared stub only has a date, so fall back to end-of-day.
+  const unlockMs =
+    vault?.deadlineUnix != null
+      ? vault.deadlineUnix * 1000
+      : vault?.deadline
+        ? new Date(`${vault.deadline}T23:59:59`).getTime()
+        : null;
   const pct = vault && vault.goal > 0 ? Math.min(100, Math.round((vault.saved / vault.goal) * 100)) : 0;
+  // The friend(s) who hold a key to unlock early; falls back to a generic label
+  // when none were picked (or while the friends list is still loading).
+  const keyholderNames = (vault?.keyholders ?? [])
+    .map((kid) => friends.find((f) => f.id === kid)?.name)
+    .filter((n): n is string => Boolean(n));
+  const friendLabel = keyholderNames.length > 0 ? keyholderNames.join(", ") : t.vaultDetail.aFriend;
   const isPendingInvite = vault?.shared && vault.inviteStatus === "pending";
   const isSolo = vault != null && !vault.shared;
 
@@ -171,10 +194,23 @@ export default function VaultDetailScreen() {
         )}
 
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
-          <p className="text-sm font-semibold">{t.vaultDetail.unlocksWhen}</p>
-          <p className="mt-1 text-sm text-neutral-600">{t.vaultDetail.goalReached}</p>
-          <p className="text-sm text-neutral-600">{t.vaultDetail.timerEnds}</p>
-          <p className="text-sm text-neutral-600">{t.vaultDetail.friendApproves}</p>
+          <p className="text-sm font-semibold">{t.vaultDetail.unlockConditions}</p>
+          <ul className="mt-3 flex flex-col gap-2.5 text-sm text-neutral-700">
+            <li className="flex items-center gap-2.5">
+              <span className="text-base leading-none">🎯</span>
+              <span>{t.vaultDetail.goalReached}</span>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <span className="text-base leading-none">⏳</span>
+              <span className="font-medium">{unlockMs != null ? fmtDateTime(unlockMs) : "—"}</span>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <span className="text-base leading-none">🤝</span>
+              <span>
+                {friendLabel} {t.vaultDetail.unlocks}
+              </span>
+            </li>
+          </ul>
         </section>
 
         <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
@@ -186,7 +222,12 @@ export default function VaultDetailScreen() {
           {/* DEV-ONLY: fast-forward the chain so a timer vault crosses its deadline. */}
           {IS_DEV_CHAIN && isSolo && (
             <section className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/60 p-3">
-              <p className="text-xs font-semibold text-neutral-500">{t.vaultDetail.devTimeTravel}</p>
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold text-neutral-500">{t.vaultDetail.devTimeTravel}</p>
+                <p className="text-xs text-neutral-500">
+                  {t.vaultDetail.devClock}: {chainNow ? fmtDateTime(chainNow * 1000) : "…"}
+                </p>
+              </div>
               <div className="mt-2 flex gap-2">
                 {[
                   { days: 7, label: t.vaultDetail.devSkipWeek },
@@ -266,21 +307,18 @@ export default function VaultDetailScreen() {
             </div>
           ) : (
             <>
-              {unlocked && (
-                <button type="button" onClick={withdraw} disabled={busy} className={primaryBtn}>
-                  {busy ? t.vaultDetail.processing : t.vaultDetail.withdraw}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={startDeposit}
-                className={unlocked ? secondaryBtn : primaryBtn}
-              >
+              {/* Deposit is always the top action; the bottom one switches to
+                  Withdraw once the vault's unlock conditions are met. */}
+              <button type="button" onClick={startDeposit} className={primaryBtn}>
                 {t.vaultDetail.deposit}
               </button>
-              {!unlocked && (
+              {unlocked ? (
+                <button type="button" onClick={withdraw} disabled={busy} className={secondaryBtn}>
+                  {busy ? t.vaultDetail.processing : t.vaultDetail.withdraw}
+                </button>
+              ) : (
                 <button type="button" onClick={showEarlyExitNote} className={secondaryBtn}>
-                  {t.vaultDetail.requestEarlyExit}
+                  {t.vaultDetail.requestUnlock}
                 </button>
               )}
             </>

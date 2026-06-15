@@ -54,6 +54,7 @@ export type Vault = {
   saved: number; // currently locked (for shared = sum of member contributions)
   currency: VaultCurrency;
   deadline: string | null; // ISO yyyy-mm-dd unlock date (the timer); null = no timer
+  deadlineUnix?: number; // exact unlock timestamp (unix seconds) for on-chain vaults
   yieldEarned: number; // earned by the agent while locked
   createdAt: string; // ISO yyyy-mm-dd
   shared: boolean;
@@ -131,6 +132,7 @@ function mapSoloVault(id: bigint, v: OnchainVault): Vault {
     saved: toUsd(v.saved),
     currency: "USD",
     deadline: unixToIsoDate(v.deadline),
+    deadlineUnix: Number(v.deadline),
     yieldEarned: 0, // no yield in v1
     createdAt: meta?.createdAt ?? unixToIsoDate(v.deadline),
     shared: false,
@@ -465,6 +467,12 @@ export async function isVaultUnlocked(id: string): Promise<boolean> {
 /** DEV-ONLY: jump the local chain forward N days (to watch timer vaults unlock). */
 export async function devFastForward(days: number): Promise<void> {
   await advanceChainTime(days * 24 * 60 * 60);
+}
+
+/** The chain's current time (unix seconds): real on a live chain, simulated on
+ *  the dev chain after time-travel. Drives the dev panel's clock readout. */
+export async function getChainNow(): Promise<number> {
+  return Number(await readChainNow());
 }
 
 // Accept a pending shared-vault invite (you become an accepted member).
