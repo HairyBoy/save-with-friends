@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useWallet } from "@/components/WalletProvider";
 import {
   getBalances,
   getDailyPrize,
@@ -24,6 +25,7 @@ import {
  * Stubbed today; async so it survives the swap to real on-chain/backend reads.
  */
 export function useSavings() {
+  const { address } = useWallet();
   const [data, setData] = useState<{ vaults: Vault[]; summary: SavingsSummary } | null>(null);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export function useSavings() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [address]);
 
   return {
     vaults: data?.vaults ?? [],
@@ -45,6 +47,7 @@ export function useSavings() {
 
 /** Spendable wallet balance (USD) — null while loading. `reload()` refetches. */
 export function useWalletBalance() {
+  const { address } = useWallet();
   const [balance, setBalance] = useState<number | null>(null);
   const [nonce, setNonce] = useState(0);
 
@@ -56,7 +59,7 @@ export function useWalletBalance() {
     return () => {
       active = false;
     };
-  }, [nonce]);
+  }, [nonce, address]);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   return { balance, isLoading: balance === null, reload };
@@ -64,6 +67,7 @@ export function useWalletBalance() {
 
 /** Personal-vault + shared-receiving + wallet + total (USD) — for the Me page. */
 export function useBalances() {
+  const { address } = useWallet();
   const [balances, setBalances] = useState<{
     personal: number;
     sharedReceiving: number;
@@ -79,7 +83,7 @@ export function useBalances() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [address]);
 
   return { balances, isLoading: balances === null };
 }
@@ -87,6 +91,7 @@ export function useBalances() {
 /** A single vault by id (+ its live unlock state), for the detail screen.
  *  `reload()` refetches after a deposit/withdraw/time-travel changes the chain. */
 export function useVault(id: string) {
+  const { address } = useWallet();
   // One state object set once in the async callback (avoids a synchronous
   // setState in the effect, which the react-hooks lint flags as cascading).
   const [state, setState] = useState<{
@@ -111,7 +116,7 @@ export function useVault(id: string) {
     return () => {
       active = false;
     };
-  }, [id, nonce]);
+  }, [id, nonce, address]);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   return { ...state, reload };

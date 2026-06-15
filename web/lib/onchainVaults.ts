@@ -8,10 +8,11 @@
 import { erc20Abi, parseEventLogs, type Address, type Hash } from "viem";
 import {
   CONTRACTS,
+  FEE_OPTS,
   getDevKeyholderWalletClient,
   getDevTestClient,
-  getDevWalletClient,
   getPublicClient,
+  getWalletClient,
 } from "@/lib/chains";
 import { savingsVaultsAbi } from "@/lib/savingsVaultsAbi";
 
@@ -92,9 +93,9 @@ export async function readKeyholders(id: bigint): Promise<Address[]> {
 }
 
 // --- writes ----------------------------------------------------------------
-// All writes go through the dev wallet for now (local Anvil). When MiniPay is
-// wired, swap getDevWalletClient() for the injected wallet client; the call
-// shapes are identical.
+// Writes go through getWalletClient(): the local dev wallet on Anvil, or the
+// injected MiniPay wallet on Celo. FEE_OPTS pays gas in USDm on Celo (no CELO
+// needed by the user); it's empty on Anvil.
 
 async function send(hash: Hash) {
   // Block until mined so callers can read fresh state right after.
@@ -103,12 +104,13 @@ async function send(hash: Hash) {
 
 /** ERC20 approve so the vault can pull `amount` of the token from the owner. */
 export async function approveToken(amount: bigint): Promise<void> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const hash = await wallet.writeContract({
     address: CONTRACTS.token,
     abi: erc20Abi,
     functionName: "approve",
     args: [CONTRACTS.savingsVaults, amount],
+    ...FEE_OPTS,
   });
   await send(hash);
 }
@@ -125,7 +127,7 @@ export async function createSoloVault(args: {
   deposit: bigint;
   keyholders: Address[];
 }): Promise<bigint> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const publicClient = getPublicClient();
 
   // Approve enough for the initial deposit before creating.
@@ -135,6 +137,7 @@ export async function createSoloVault(args: {
     ...vaultsContract,
     functionName: "createVault",
     args: [args.goal, args.deadline, args.keyholders],
+    ...FEE_OPTS,
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
 
@@ -152,22 +155,24 @@ export async function createSoloVault(args: {
 
 /** Add funds to a vault (owner-only). Caller must have approved first. */
 export async function deposit(id: bigint, amount: bigint): Promise<void> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const hash = await wallet.writeContract({
     ...vaultsContract,
     functionName: "deposit",
     args: [id, amount],
+    ...FEE_OPTS,
   });
   await send(hash);
 }
 
 /** Withdraw the full balance once unlocked (closes the vault). */
 export async function withdraw(id: bigint): Promise<void> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const hash = await wallet.writeContract({
     ...vaultsContract,
     functionName: "withdraw",
     args: [id],
+    ...FEE_OPTS,
   });
   await send(hash);
 }

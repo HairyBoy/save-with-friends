@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { LanguageProvider } from "@/components/LanguageProvider";
+import { WalletProvider } from "@/components/WalletProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,7 +50,9 @@ export default function RootLayout({
             aria-hidden
             className="pointer-events-none absolute -bottom-16 left-1/2 h-60 w-72 -translate-x-1/2 rounded-full bg-emerald-400/25 blur-3xl"
           />
-          <LanguageProvider>{children}</LanguageProvider>
+          <LanguageProvider>
+            <WalletProvider>{children}</WalletProvider>
+          </LanguageProvider>
         </div>
       </body>
     </html>

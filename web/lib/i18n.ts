@@ -143,7 +143,8 @@ const en = {
   profile: {
     title: "Me",
     account: "MiniPay account",
-    addressHint: "[ address hint · 0x1234…abcd ]",
+    connecting: "Connecting…",
+    notConnected: "Not connected — open in MiniPay",
     balancesTitle: "Your money",
     personalVaults: "In your personal vaults",
     sharedReceiving: "Receiving from shared vaults",
@@ -292,7 +293,8 @@ const es: typeof en = {
   profile: {
     title: "Yo",
     account: "Cuenta de MiniPay",
-    addressHint: "[ dirección · 0x1234…abcd ]",
+    connecting: "Conectando…",
+    notConnected: "Sin conectar — ábrelo en MiniPay",
     balancesTitle: "Tu dinero",
     personalVaults: "En tus alcancías personales",
     sharedReceiving: "Recibirás de compartidas",

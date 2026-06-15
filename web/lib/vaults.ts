@@ -12,8 +12,8 @@
 // a backend later. UI-facing types stay plain numbers (human USD); the on-chain
 // wei<->USD conversion is hidden in this file.
 
-import { formatUnits, parseUnits, type Address } from "viem";
-import { devAccount, isLocalChain, TOKEN_DECIMALS } from "@/lib/chains";
+import { formatUnits, parseUnits, zeroAddress, type Address } from "viem";
+import { getActiveAccount, isLocalChain, TOKEN_DECIMALS } from "@/lib/chains";
 import {
   advanceChainTime,
   approveEarlyExitAs,
@@ -82,10 +82,11 @@ export type DailyPrize = {
 
 export type Friend = { id: string; name: string; address?: Address };
 
-// The connected user's address. For now it's the Anvil dev account (everything is
-// owned by / read for that account); becomes the MiniPay wallet address later.
+// The connected user's address: the local dev account on Anvil, or the connected
+// MiniPay wallet on Celo. Falls back to the zero address before a wallet connects
+// (reads then return empty / zero rather than throwing — owner-of-nothing).
 function currentUser(): Address {
-  return devAccount.address;
+  return getActiveAccount() ?? zeroAddress;
 }
 
 // --- off-chain vault metadata (name/emoji/created/keyholder picks) ----------

@@ -9,6 +9,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  custom,
   defineChain,
   http,
   type Address,
@@ -129,3 +130,67 @@ export function getDevTestClient() {
   }
   return createTestClient({ chain: activeChain, mode: "anvil", transport: http(ACTIVE_RPC) });
 }
+
+// --- active account + signer (dev wallet locally, injected MiniPay on Celo) ---
+
+// The address the app acts as: locally the dev account; on Celo the connected
+// injected (MiniPay) wallet. Module-level so the non-React data layer (lib/vaults)
+// can read it synchronously; WalletProvider keeps it in sync with React state.
+let activeAccount: Address | null = isLocalChain ? devAccount.address : null;
+
+export function getActiveAccount(): Address | null {
+  return activeAccount;
+}
+
+function injectedProvider() {
+  return typeof window !== "undefined" ? window.ethereum : undefined;
+}
+
+/** Whether the injected wallet is MiniPay (drives connect UX / copy). */
+export function isMiniPay(): boolean {
+  return injectedProvider()?.isMiniPay === true;
+}
+
+/**
+ * Zero-click connect: locally returns the dev account; on Celo reads the injected
+ * (MiniPay) account with no prompt. Sets the module account and returns it (null
+ * if there's no injected wallet — e.g. a normal browser tab on testnet).
+ */
+export async function connectWallet(): Promise<Address | null> {
+  if (isLocalChain) {
+    activeAccount = devAccount.address;
+    return activeAccount;
+  }
+  const provider = injectedProvider();
+  if (!provider) {
+    activeAccount = null;
+    return null;
+  }
+  const wallet = createWalletClient({ chain: activeChain, transport: custom(provider) });
+  const [addr] = await wallet.getAddresses();
+  activeAccount = addr ?? null;
+  return activeAccount;
+}
+
+/**
+ * The signer for writes: the dev wallet locally, or the injected MiniPay wallet on
+ * Celo. Throws on Celo if no wallet is connected (no injected provider / account).
+ */
+export function getWalletClient() {
+  if (isLocalChain) return getDevWalletClient();
+  const provider = injectedProvider();
+  if (!provider || !activeAccount) {
+    throw new Error("No wallet connected — open this in MiniPay or a Celo wallet.");
+  }
+  return createWalletClient({
+    account: activeAccount,
+    chain: activeChain,
+    transport: custom(provider),
+  });
+}
+
+// Pay gas in USDm on Celo (CIP-64 fee abstraction; USDm is its own fee adapter);
+// native gas on local Anvil. Spread into writeContract calls.
+export const FEE_OPTS: { feeCurrency?: Address } = isLocalChain
+  ? {}
+  : { feeCurrency: CONTRACTS.token };
