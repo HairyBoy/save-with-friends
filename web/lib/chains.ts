@@ -1,9 +1,9 @@
 // Chain + contract wiring for the on-chain SavingsVaults.
 //
-// For now this targets a LOCAL Anvil node (the Foundry dev chain) so the whole
-// app can be developed against the real contract with fake money and zero risk.
-// Celo Sepolia / mainnet get added here later (a second entry + a switch on an
-// env var); nothing else in the app needs to know which chain is active.
+// The target chain is chosen at build time via NEXT_PUBLIC_CHAIN: "anvil" (the
+// default — local Foundry dev chain, fake money, zero risk) or "celoSepolia"
+// (the Celo Sepolia testnet deployment). Nothing else in the app needs to know
+// which chain is active; it reads activeChain / ACTIVE_RPC / CONTRACTS from here.
 
 import {
   createPublicClient,
@@ -12,7 +12,9 @@ import {
   defineChain,
   http,
   type Address,
+  type Chain,
 } from "viem";
+import { celoSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 
 // The local Foundry chain. id 31337 is Anvil's default.
@@ -23,21 +25,44 @@ export const anvil = defineChain({
   rpcUrls: { default: { http: ["http://localhost:8545"] } },
 });
 
-// The chain the app talks to right now. Swap/branch this when Celo is wired.
-export const activeChain = anvil;
-export const ACTIVE_RPC = anvil.rpcUrls.default.http[0];
+type ChainKey = "anvil" | "celoSepolia";
 
-// Deployed addresses on a fresh Anvil. These are DETERMINISTIC — they come from
-// the deployer account + nonce in contracts/script/Deploy.s.sol, so re-running
-// the deploy on a clean Anvil always yields these same two addresses.
-export const CONTRACTS = {
-  savingsVaults: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0" as Address,
-  // Mock cUSD stand-in (on Celo this becomes the real USDm address from lib/tokens).
-  token: "0x5FbDB2315678afecb367f032d93F642f64180aa3" as Address,
-} as const;
+const CHAIN_CONFIG: Record<
+  ChainKey,
+  { chain: Chain; contracts: { savingsVaults: Address; token: Address } }
+> = {
+  anvil: {
+    chain: anvil,
+    // DETERMINISTIC local addresses — re-running Deploy.s.sol on a fresh Anvil
+    // always yields these (deployer account + nonce).
+    contracts: {
+      savingsVaults: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+      token: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    },
+  },
+  celoSepolia: {
+    chain: celoSepolia,
+    contracts: {
+      // Our SavingsVaults deploy output — set via env after deploying; "0x" until
+      // then so writes fail fast rather than hit a wrong address.
+      savingsVaults: (process.env.NEXT_PUBLIC_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
+      // USDm (Mento dollar) on Celo Sepolia — verified from Celo docs. The vault's
+      // immutable token: 18 decimals, and it's its own fee-currency adapter so gas
+      // can be paid in USDm (MiniPay fee abstraction).
+      token: "0xEF4d55D6dE8e8d73232827Cd1e9b2F2dBb45bC80",
+    },
+  },
+};
 
-// The vault token is 18-decimal (the mock matches USDm/cUSD). One place to change
-// if the canonical token's decimals ever differ.
+const CHAIN_KEY: ChainKey =
+  process.env.NEXT_PUBLIC_CHAIN === "celoSepolia" ? "celoSepolia" : "anvil";
+
+export const activeChain = CHAIN_CONFIG[CHAIN_KEY].chain;
+export const ACTIVE_RPC = activeChain.rpcUrls.default.http[0];
+export const CONTRACTS = CHAIN_CONFIG[CHAIN_KEY].contracts;
+
+// The vault token is 18-decimal (Anvil mock + Celo USDm both 18). One place to
+// change if the canonical token's decimals ever differ.
 export const TOKEN_DECIMALS = 18;
 
 // A read-only client. Safe everywhere (no wallet, no signing).
