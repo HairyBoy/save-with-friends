@@ -1,0 +1,9 @@
+# Foundry build artifacts
+out/
+cache/
+broadcast/
+
+# Dependencies are tracked as pinned git submodules (see /.gitmodules):
+# forge-std v1.16.1, OpenZeppelin v5.1.0. Restore on clone with:
+#   git submodule update --init --recursive
+# so lib/ is intentionally NOT ignored.
