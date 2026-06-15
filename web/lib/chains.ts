@@ -70,6 +70,32 @@ export function getDevWalletClient() {
 // True only on the local Anvil chain — gates dev-only affordances (time travel).
 export const isLocalChain = activeChain.id === anvil.id;
 
+// DEV-ONLY: Anvil's other well-known test accounts, used as stand-in keyholder
+// wallets so the friend-approves-unlock flow can be driven locally. Account 0 is
+// the owner (devAccount above); these are accounts 1 & 2. Public Anvil keys —
+// local only, control nothing real, must never touch a live chain.
+const ANVIL_KEYHOLDER_KEYS: Record<string, `0x${string}`> = {
+  "0x70997970c51812dc3a010c7d01b50e0d17dc79c8":
+    "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+  "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc":
+    "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+};
+
+// A wallet client that signs AS a given keyholder (their own Anvil test account),
+// so a friend can approve an early unlock — the owner can't approve their own.
+export function getDevKeyholderWalletClient(keyholder: Address) {
+  if (!isLocalChain) {
+    throw new Error("keyholder approval is local-only (Anvil test accounts)");
+  }
+  const key = ANVIL_KEYHOLDER_KEYS[keyholder.toLowerCase()];
+  if (!key) throw new Error(`no dev key for keyholder ${keyholder}`);
+  return createWalletClient({
+    account: privateKeyToAccount(key),
+    chain: activeChain,
+    transport: http(ACTIVE_RPC),
+  });
+}
+
 // A test client that can drive Anvil's clock. Local-only: the test RPC methods
 // (evm_increaseTime/evm_mine) exist only on a dev node, never on a real chain.
 export function getDevTestClient() {

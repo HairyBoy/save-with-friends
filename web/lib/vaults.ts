@@ -16,12 +16,13 @@ import { formatUnits, parseUnits, type Address } from "viem";
 import { devAccount, isLocalChain, TOKEN_DECIMALS } from "@/lib/chains";
 import {
   advanceChainTime,
+  approveEarlyExitAs,
   createSoloVault as createSoloVaultOnchain,
   deposit as depositOnchain,
   withdraw as withdrawOnchain,
-  approveEarlyExit as approveEarlyExitOnchain,
   approveToken,
   readChainNow,
+  readKeyholders,
   readOwnerVaultIds,
   readTokenBalance,
   readUnlocked,
@@ -79,7 +80,7 @@ export type DailyPrize = {
   totalEntries: number; // everyone's entries today
 };
 
-export type Friend = { id: string; name: string };
+export type Friend = { id: string; name: string; address?: Address };
 
 // The connected user's address. For now it's the Anvil dev account (everything is
 // owned by / read for that account); becomes the MiniPay wallet address later.
@@ -154,9 +155,12 @@ async function getOnchainSoloVaults(): Promise<Vault[]> {
 
 // --- shared vaults (in-memory stub; ids namespaced "shared-…") --------------
 
+// Stub friends. Their addresses are Anvil test accounts 1 & 2 (account 0 is the
+// owner/dev wallet), so picking them as keyholders wires real on-chain keys that
+// can actually approve an early unlock. In production these become real wallets.
 const FAKE_FRIENDS: Friend[] = [
-  { id: "ana", name: "Ana" },
-  { id: "luis", name: "Luis" },
+  { id: "ana", name: "Ana", address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" },
+  { id: "luis", name: "Luis", address: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" },
 ];
 
 let SHARED_VAULTS: Vault[] = [
@@ -416,15 +420,17 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
   }
 
   // --- solo: real on-chain create (approve → createVault → deposit) ---
-  // Keyholders are passed empty on-chain for now: app friends have no on-chain
-  // address yet (the social graph is off-chain), so the picks are saved as display
-  // metadata only. The early-exit approval flow becomes real once friends carry
-  // addresses; goal/deadline unlock paths already work.
+  // The picked friends become real on-chain keyholders (their addresses), so any
+  // one of them can approve an early unlock (solo threshold = 1). Friends without
+  // an address are skipped. Picks are also saved as metadata for display.
+  const keyholders = input.friendIds
+    .map((fid) => FAKE_FRIENDS.find((f) => f.id === fid)?.address)
+    .filter((a): a is Address => Boolean(a));
   const id = await createSoloVaultOnchain({
     goal: parseUnits(String(input.goal), TOKEN_DECIMALS),
     deadline: await deadlineToUnix(input.deadline),
     deposit: parseUnits(String(input.deposit), TOKEN_DECIMALS),
-    keyholders: [],
+    keyholders,
   });
 
   const idStr = id.toString();
@@ -453,9 +459,24 @@ export async function withdrawVault(id: string): Promise<void> {
   await withdrawOnchain(BigInt(id));
 }
 
-/** A keyholder approves an early exit on a solo vault. */
-export async function requestEarlyExit(id: string): Promise<void> {
-  await approveEarlyExitOnchain(BigInt(id));
+export type VaultKeyholder = { address: string; name: string };
+
+/** The friends who hold a key to a solo vault (on-chain addresses → names). */
+export async function getVaultKeyholders(id: string): Promise<VaultKeyholder[]> {
+  if (id.startsWith("shared-")) return []; // shared keys are a v2 concern
+  const addrs = await readKeyholders(BigInt(id));
+  return addrs.map((a) => ({
+    address: a,
+    name:
+      FAKE_FRIENDS.find((f) => f.address?.toLowerCase() === a.toLowerCase())?.name ??
+      `${a.slice(0, 6)}…${a.slice(-4)}`,
+  }));
+}
+
+/** DEV-ONLY: approve an early unlock AS a given keyholder (their Anvil account),
+ *  to drive the friend-approves-unlock flow locally. One approval unlocks. */
+export async function devApproveAsKeyholder(id: string, keyholder: string): Promise<void> {
+  await approveEarlyExitAs(BigInt(id), keyholder as Address);
 }
 
 /** Live unlock check for a solo vault (goal/deadline/approvals). */

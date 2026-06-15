@@ -8,6 +8,7 @@
 import { erc20Abi, parseEventLogs, type Address, type Hash } from "viem";
 import {
   CONTRACTS,
+  getDevKeyholderWalletClient,
   getDevTestClient,
   getDevWalletClient,
   getPublicClient,
@@ -182,9 +183,14 @@ export async function advanceChainTime(seconds: number): Promise<void> {
   await test.mine({ blocks: 1 });
 }
 
-/** A keyholder approves an early exit. */
-export async function approveEarlyExit(id: bigint): Promise<void> {
-  const wallet = getDevWalletClient();
+/**
+ * A keyholder approves an early exit, signed by the keyholder's OWN wallet (the
+ * contract bars the owner from self-approving). Solo threshold is 1, so a single
+ * approval unlocks. In dev, `keyholder` is an Anvil test account; in production
+ * it's the friend's real wallet signing from their own device.
+ */
+export async function approveEarlyExitAs(id: bigint, keyholder: Address): Promise<void> {
+  const wallet = getDevKeyholderWalletClient(keyholder);
   const hash = await wallet.writeContract({
     ...vaultsContract,
     functionName: "approveEarlyExit",

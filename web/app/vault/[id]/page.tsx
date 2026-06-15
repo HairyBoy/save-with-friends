@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
-import { useFriends, useVault, useWalletBalance } from "@/hooks/useVaults";
+import { useVault, useWalletBalance } from "@/hooks/useVaults";
 import {
   acceptInvite,
   declineInvite,
   depositToVault,
+  devApproveAsKeyholder,
   devFastForward,
   IS_DEV_CHAIN,
   vaultPayout,
@@ -29,9 +30,8 @@ export default function VaultDetailScreen() {
   const { t, lang } = useLanguage();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { vault, unlocked, chainNow, isLoading, reload } = useVault(id);
+  const { vault, unlocked, chainNow, keyholders, isLoading, reload } = useVault(id);
   const { balance, reload: reloadWallet } = useWalletBalance();
-  const { friends } = useFriends();
 
   const [depositing, setDepositing] = useState(false);
   const [amount, setAmount] = useState("");
@@ -58,12 +58,12 @@ export default function VaultDetailScreen() {
         ? new Date(`${vault.deadline}T23:59:59`).getTime()
         : null;
   const pct = vault && vault.goal > 0 ? Math.min(100, Math.round((vault.saved / vault.goal) * 100)) : 0;
-  // The friend(s) who hold a key to unlock early; falls back to a generic label
-  // when none were picked (or while the friends list is still loading).
-  const keyholderNames = (vault?.keyholders ?? [])
-    .map((kid) => friends.find((f) => f.id === kid)?.name)
-    .filter((n): n is string => Boolean(n));
-  const friendLabel = keyholderNames.length > 0 ? keyholderNames.join(", ") : t.vaultDetail.aFriend;
+  // The friend(s) who hold a key to unlock early (on-chain keyholders, resolved
+  // to names); falls back to a generic label when none were picked.
+  const friendLabel =
+    keyholders.length > 0
+      ? keyholders.map((k) => k.name).join(", ")
+      : t.vaultDetail.aFriend;
   const isPendingInvite = vault?.shared && vault.inviteStatus === "pending";
   const isSolo = vault != null && !vault.shared;
 
@@ -129,9 +129,22 @@ export default function VaultDetailScreen() {
     setDepositing(true);
   }
 
-  function showEarlyExitNote() {
+  function requestUnlock() {
     setError(null);
-    setNote(t.vaultDetail.earlyExitSoon);
+    setNote(keyholders.length > 0 ? t.vaultDetail.unlockAsk : t.vaultDetail.noKeyholders);
+  }
+
+  // DEV: approve the early unlock as one of the keyholders (their Anvil account).
+  async function approveAs(keyholder: string) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await devApproveAsKeyholder(id, keyholder);
+      reload(); // approvals >= threshold → unlocked
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -248,6 +261,27 @@ export default function VaultDetailScreen() {
             </section>
           )}
 
+          {/* DEV-ONLY: approve the early unlock as a keyholder (their Anvil acct),
+              to drive the friend-unlocks flow. Hidden once already unlocked. */}
+          {IS_DEV_CHAIN && isSolo && !unlocked && keyholders.length > 0 && (
+            <section className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/60 p-3">
+              <p className="text-xs font-semibold text-neutral-500">{t.vaultDetail.devApproveAs}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {keyholders.map((k) => (
+                  <button
+                    key={k.address}
+                    type="button"
+                    onClick={() => approveAs(k.address)}
+                    disabled={busy}
+                    className="flex-1 rounded-xl border border-neutral-200 bg-white/70 px-2 py-2 text-xs font-medium text-neutral-600 disabled:opacity-50"
+                  >
+                    {t.vaultDetail.approveAs} {k.name}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {isPendingInvite ? (
             <>
               <button type="button" onClick={accept} className={primaryBtn}>
@@ -317,7 +351,7 @@ export default function VaultDetailScreen() {
                   {busy ? t.vaultDetail.processing : t.vaultDetail.withdraw}
                 </button>
               ) : (
-                <button type="button" onClick={showEarlyExitNote} className={secondaryBtn}>
+                <button type="button" onClick={requestUnlock} className={secondaryBtn}>
                   {t.vaultDetail.requestUnlock}
                 </button>
               )}

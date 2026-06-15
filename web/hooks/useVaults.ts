@@ -8,9 +8,11 @@ import {
   getSavingsSummary,
   getChainNow,
   getVault,
+  getVaultKeyholders,
   getVaults,
   getWalletBalance,
   isVaultUnlocked,
+  type VaultKeyholder,
   type DailyPrize,
   type Friend,
   type SavingsSummary,
@@ -91,17 +93,21 @@ export function useVault(id: string) {
     vault: Vault | null;
     unlocked: boolean;
     chainNow: number; // chain clock (unix s) — real or simulated; 0 while loading
+    keyholders: VaultKeyholder[];
     isLoading: boolean;
-  }>({ vault: null, unlocked: false, chainNow: 0, isLoading: true });
+  }>({ vault: null, unlocked: false, chainNow: 0, keyholders: [], isLoading: true });
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getVault(id), isVaultUnlocked(id), getChainNow()]).then(
-      ([vault, unlocked, chainNow]) => {
-        if (active) setState({ vault, unlocked, chainNow, isLoading: false });
-      },
-    );
+    Promise.all([
+      getVault(id),
+      isVaultUnlocked(id),
+      getChainNow(),
+      getVaultKeyholders(id),
+    ]).then(([vault, unlocked, chainNow, keyholders]) => {
+      if (active) setState({ vault, unlocked, chainNow, keyholders, isLoading: false });
+    });
     return () => {
       active = false;
     };
