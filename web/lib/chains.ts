@@ -28,10 +28,13 @@ export const anvil = defineChain({
 
 type ChainKey = "anvil" | "celoSepolia";
 
-const CHAIN_CONFIG: Record<
-  ChainKey,
-  { chain: Chain; contracts: { savingsVaults: Address; token: Address } }
-> = {
+type ChainEntry = {
+  chain: Chain;
+  contracts: { savingsVaults: Address; token: Address };
+  decimals: number; // the vault token's decimals
+};
+
+const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
   anvil: {
     chain: anvil,
     // DETERMINISTIC local addresses — re-running Deploy.s.sol on a fresh Anvil
@@ -40,6 +43,7 @@ const CHAIN_CONFIG: Record<
       savingsVaults: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
       token: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     },
+    decimals: 18, // MockERC20
   },
   celoSepolia: {
     chain: celoSepolia,
@@ -47,13 +51,13 @@ const CHAIN_CONFIG: Record<
       // Our SavingsVaults deploy output — set via env after deploying; "0x" until
       // then so writes fail fast rather than hit a wrong address.
       savingsVaults: (process.env.NEXT_PUBLIC_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
-      // USDm (Mento dollar) on Celo Sepolia — the LIVE, liquid Mento stablecoin
-      // (symbol "USDm"), verified via the Mento on-chain registry/SDK. (Note: the
-      // 0xEF4d… address some docs list is a legacy "cUSD" token with no Mento
-      // liquidity — don't use it.) 18 decimals; its own fee-currency adapter so
-      // gas can be paid in USDm (MiniPay fee abstraction).
-      token: "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b",
+      // USDC on Celo Sepolia — chosen for testnet because it's directly faucetable
+      // (faucet.circle.com), unlike Mento USDm whose Sepolia pools are drained. A
+      // first-class MiniPay stablecoin. The mainnet token is a separate, deliberate
+      // choice (likely USDm/cUSD or USDT) — testnet token does not commit it.
+      token: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
     },
+    decimals: 6, // USDC
   },
 };
 
@@ -64,9 +68,9 @@ export const activeChain = CHAIN_CONFIG[CHAIN_KEY].chain;
 export const ACTIVE_RPC = activeChain.rpcUrls.default.http[0];
 export const CONTRACTS = CHAIN_CONFIG[CHAIN_KEY].contracts;
 
-// The vault token is 18-decimal (Anvil mock + Celo USDm both 18). One place to
-// change if the canonical token's decimals ever differ.
-export const TOKEN_DECIMALS = 18;
+// The vault token's decimals (Anvil mock = 18, Celo Sepolia USDC = 6). The
+// human-USD <-> base-unit conversion in lib/vaults uses this.
+export const TOKEN_DECIMALS = CHAIN_CONFIG[CHAIN_KEY].decimals;
 
 // A read-only client. Safe everywhere (no wallet, no signing).
 export function getPublicClient() {
@@ -191,8 +195,9 @@ export function getWalletClient() {
   });
 }
 
-// Pay gas in USDm on Celo (CIP-64 fee abstraction; USDm is its own fee adapter);
-// native gas on local Anvil. Spread into writeContract calls.
-export const FEE_OPTS: { feeCurrency?: Address } = isLocalChain
-  ? {}
-  : { feeCurrency: CONTRACTS.token };
+// Gas options spread into writeContract calls. Left empty for now (pay native
+// CELO), because the testnet token is USDC and CIP-64 fee abstraction in USDC
+// requires the USDC *adapter* address (6→18), not the token address. TODO: wire
+// the Celo USDC fee-currency adapter so users can pay gas in USDC; in real MiniPay
+// the wallet handles the fee currency itself regardless.
+export const FEE_OPTS: { feeCurrency?: Address } = {};
