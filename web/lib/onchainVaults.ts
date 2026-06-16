@@ -122,10 +122,11 @@ export async function approveToken(amount: bigint): Promise<void> {
 }
 
 /**
- * Create a solo vault and fund it with an initial deposit, end to end:
- * approve → createVault → deposit. Returns the new on-chain vault id (parsed
- * from the VaultCreated event). `deadline` is unix seconds and MUST be > now
- * (the contract enforces the liveness backstop).
+ * Create a solo vault and fund it in ONE on-chain call: approve → createVault
+ * (with initialDeposit). Just two transactions (down from three), and no
+ * brittle create-then-deposit sequencing — the contract pulls the deposit
+ * atomically inside createVault. Returns the new id (from the VaultCreated
+ * event). `deadline` is unix seconds and MUST be > now (contract enforces it).
  */
 export async function createSoloVault(args: {
   goal: bigint;
@@ -136,16 +137,17 @@ export async function createSoloVault(args: {
   const wallet = getWalletClient();
   const publicClient = getPublicClient();
 
-  // Approve enough for the initial deposit before creating.
+  // Approve the initial deposit so createVault can pull it in the same tx.
   if (args.deposit > 0n) await approveToken(args.deposit);
 
   const createHash = await wallet.writeContract({
     ...vaultsContract,
     functionName: "createVault",
-    args: [args.goal, args.deadline, args.keyholders],
+    args: [args.goal, args.deadline, args.keyholders, args.deposit],
     ...FEE_OPTS,
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
+  if (receipt.status === "reverted") throw new Error("createVault reverted on-chain");
 
   const [created] = parseEventLogs({
     abi: savingsVaultsAbi,
@@ -153,10 +155,7 @@ export async function createSoloVault(args: {
     logs: receipt.logs,
   });
   if (!created) throw new Error("VaultCreated event missing from receipt");
-  const id = created.args.id;
-
-  if (args.deposit > 0n) await deposit(id, args.deposit);
-  return id;
+  return created.args.id;
 }
 
 /** Add funds to a vault (owner-only). Caller must have approved first. */

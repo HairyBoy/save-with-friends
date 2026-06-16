@@ -155,4 +155,43 @@ contract SavingsVaultsTest is Test {
         vm.stopPrank();
         assertEq(vaults.getVault(id).approvals, 1);
     }
+
+    // --- funded create (create + deposit in one tx) ---
+
+    function test_CreateWithInitialDeposit() public {
+        vm.prank(owner);
+        uint256 id = vaults.createVault(GOAL, deadline, _keyholders(), 40e18);
+        SavingsVaults.Vault memory v = vaults.getVault(id);
+        assertEq(v.owner, owner);
+        assertEq(v.saved, 40e18); // funded atomically
+        assertEq(token.balanceOf(address(vaults)), 40e18);
+        assertEq(token.balanceOf(owner), START - 40e18);
+        assertFalse(vaults.unlocked(id)); // below goal
+    }
+
+    function test_CreateWithDepositReachingGoalUnlocks() public {
+        vm.prank(owner);
+        uint256 id = vaults.createVault(GOAL, deadline, _keyholders(), GOAL);
+        assertEq(vaults.getVault(id).saved, GOAL);
+        assertTrue(vaults.unlocked(id)); // goal met at creation
+        vm.prank(owner);
+        vaults.withdraw(id);
+        assertEq(token.balanceOf(owner), START); // round-trips
+        assertTrue(vaults.getVault(id).closed);
+    }
+
+    function test_CreateWithZeroInitialDepositIsUnfunded() public {
+        vm.prank(owner);
+        uint256 id = vaults.createVault(GOAL, deadline, _keyholders(), 0);
+        assertEq(vaults.getVault(id).saved, 0);
+        assertEq(token.balanceOf(address(vaults)), 0);
+    }
+
+    function test_CreateWithDepositRequiresApproval() public {
+        address poor = makeAddr("poor");
+        token.mint(poor, 50e18); // has tokens but has NOT approved the vault
+        vm.prank(poor);
+        vm.expectRevert(); // SafeERC20: transferFrom without allowance
+        vaults.createVault(GOAL, deadline, _keyholders(), 40e18);
+    }
 }
