@@ -98,8 +98,14 @@ export async function readKeyholders(id: bigint): Promise<Address[]> {
 // needed by the user); it's empty on Anvil.
 
 async function send(hash: Hash) {
-  // Block until mined so callers can read fresh state right after.
-  return getPublicClient().waitForTransactionReceipt({ hash });
+  // Block until mined so callers can read fresh state right after. viem resolves
+  // even for reverted txns, so check the status explicitly and surface a failure
+  // (otherwise a reverted deposit/withdraw would look like success to the UI).
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  if (receipt.status === "reverted") {
+    throw new Error("Transaction reverted on-chain");
+  }
+  return receipt;
 }
 
 /** ERC20 approve so the vault can pull `amount` of the token from the owner. */
