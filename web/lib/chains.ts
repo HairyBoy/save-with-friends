@@ -32,6 +32,7 @@ type ChainEntry = {
   chain: Chain;
   contracts: { savingsVaults: Address; token: Address };
   decimals: number; // the vault token's decimals
+  feeCurrency?: Address; // CIP-64 fee-currency to pay gas in (so users need no CELO)
 };
 
 const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
@@ -58,6 +59,9 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       token: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
     },
     decimals: 6, // USDC
+    // USDC's CIP-64 fee-currency adapter (6→18) — verified via FeeCurrencyDirectory.
+    // Pass as feeCurrency so gas is paid in USDC and the user needs no CELO.
+    feeCurrency: "0xbf1441Ea57f43f35f713431001f35742c88071c7",
   },
 };
 
@@ -65,7 +69,17 @@ const CHAIN_KEY: ChainKey =
   process.env.NEXT_PUBLIC_CHAIN === "celoSepolia" ? "celoSepolia" : "anvil";
 
 export const activeChain = CHAIN_CONFIG[CHAIN_KEY].chain;
-export const ACTIVE_RPC = activeChain.rpcUrls.default.http[0];
+// In the browser on Celo, reads go through our same-origin /api/rpc proxy, which
+// forwards to a dedicated RPC (Alchemy) using a SERVER-ONLY key — so the key is
+// never bundled client-side. On the server / Node and on Anvil, use the direct
+// RPC (CELO_SEPOLIA_RPC server env, else the chain default).
+const SERVER_RPC =
+  (CHAIN_KEY === "celoSepolia" && process.env.CELO_SEPOLIA_RPC) ||
+  activeChain.rpcUrls.default.http[0];
+export const ACTIVE_RPC =
+  CHAIN_KEY === "celoSepolia" && typeof window !== "undefined"
+    ? `${window.location.origin}/api/rpc`
+    : SERVER_RPC;
 export const CONTRACTS = CHAIN_CONFIG[CHAIN_KEY].contracts;
 
 // The vault token's decimals (Anvil mock = 18, Celo Sepolia USDC = 6). The
@@ -195,9 +209,10 @@ export function getWalletClient() {
   });
 }
 
-// Gas options spread into writeContract calls. Left empty for now (pay native
-// CELO), because the testnet token is USDC and CIP-64 fee abstraction in USDC
-// requires the USDC *adapter* address (6→18), not the token address. TODO: wire
-// the Celo USDC fee-currency adapter so users can pay gas in USDC; in real MiniPay
-// the wallet handles the fee currency itself regardless.
-export const FEE_OPTS: { feeCurrency?: Address } = {};
+// Gas options spread into writeContract calls. On Celo we set feeCurrency to the
+// token's CIP-64 adapter so gas is paid in the stablecoin (USDC) — a MiniPay user
+// holds no CELO. Empty on Anvil (native gas).
+const _feeCurrency = CHAIN_CONFIG[CHAIN_KEY].feeCurrency;
+export const FEE_OPTS: { feeCurrency?: Address } = _feeCurrency
+  ? { feeCurrency: _feeCurrency }
+  : {};
