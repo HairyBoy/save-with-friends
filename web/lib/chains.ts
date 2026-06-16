@@ -33,6 +33,10 @@ type ChainEntry = {
   contracts: { savingsVaults: Address; token: Address };
   decimals: number; // the vault token's decimals
   feeCurrency?: Address; // CIP-64 fee-currency to pay gas in (so users need no CELO)
+  // The stub friends' addresses (keyholders), per chain. On Anvil these are the
+  // well-known test accounts (public keys, signed client-side); on Celo Sepolia
+  // they're dedicated wallets whose keys live server-only (signed via /api/dev).
+  friends: { ana: Address; luis: Address };
 };
 
 const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
@@ -45,6 +49,10 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       token: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     },
     decimals: 18, // MockERC20
+    friends: {
+      ana: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Anvil acct 1
+      luis: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", // Anvil acct 2
+    },
   },
   celoSepolia: {
     chain: celoSepolia,
@@ -62,6 +70,11 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
     // USDC's CIP-64 fee-currency adapter (6→18) — verified via FeeCurrencyDirectory.
     // Pass as feeCurrency so gas is paid in USDC and the user needs no CELO.
     feeCurrency: "0xbf1441Ea57f43f35f713431001f35742c88071c7",
+    friends: {
+      // Dedicated testnet wallets (keys are server-only: ANA_PK/LUIS_PK in env).
+      ana: "0xf84658EE8704269e863e9CF28dD38D4007dd2080",
+      luis: "0xe092eF39dcd29016F07f5D3fA283f9456Ba9a7C2",
+    },
   },
 };
 
@@ -81,6 +94,8 @@ export const ACTIVE_RPC =
     ? `${window.location.origin}/api/rpc`
     : SERVER_RPC;
 export const CONTRACTS = CHAIN_CONFIG[CHAIN_KEY].contracts;
+// The stub friends' keyholder addresses for the active chain.
+export const FRIEND_ADDRESSES = CHAIN_CONFIG[CHAIN_KEY].friends;
 
 // The vault token's decimals (Anvil mock = 18, Celo Sepolia USDC = 6). The
 // human-USD <-> base-unit conversion in lib/vaults uses this.
@@ -113,8 +128,13 @@ export function getDevWalletClient() {
   });
 }
 
-// True only on the local Anvil chain — gates dev-only affordances (time travel).
+// True only on the local Anvil chain — gates affordances that need a dev node
+// (time travel via evm_increaseTime).
 export const isLocalChain = activeChain.id === anvil.id;
+
+// True in any non-production test environment (local Anvil OR Celo Sepolia testnet)
+// — gates dev affordances that are fine on a testnet, like "approve as keyholder".
+export const isTestEnv = isLocalChain || activeChain.id === celoSepolia.id;
 
 // DEV-ONLY: Anvil's other well-known test accounts, used as stand-in keyholder
 // wallets so the friend-approves-unlock flow can be driven locally. Account 0 is

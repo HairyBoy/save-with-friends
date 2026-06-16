@@ -13,7 +13,13 @@
 // wei<->USD conversion is hidden in this file.
 
 import { formatUnits, parseUnits, zeroAddress, type Address } from "viem";
-import { getActiveAccount, isLocalChain, TOKEN_DECIMALS } from "@/lib/chains";
+import {
+  FRIEND_ADDRESSES,
+  getActiveAccount,
+  isLocalChain,
+  isTestEnv,
+  TOKEN_DECIMALS,
+} from "@/lib/chains";
 import {
   advanceChainTime,
   approveEarlyExitAs,
@@ -30,8 +36,10 @@ import {
   type OnchainVault,
 } from "@/lib/onchainVaults";
 
-// Whether dev-only affordances (the time-travel panel) should be available.
+// Whether local-only dev affordances (the time-travel panel) should be available.
 export const IS_DEV_CHAIN = isLocalChain;
+// Whether testnet-friendly dev affordances ("approve as keyholder") are available.
+export const IS_TEST_ENV = isTestEnv;
 
 export type VaultCurrency = "USD";
 
@@ -156,12 +164,13 @@ async function getOnchainSoloVaults(): Promise<Vault[]> {
 
 // --- shared vaults (in-memory stub; ids namespaced "shared-…") --------------
 
-// Stub friends. Their addresses are Anvil test accounts 1 & 2 (account 0 is the
-// owner/dev wallet), so picking them as keyholders wires real on-chain keys that
-// can actually approve an early unlock. In production these become real wallets.
+// Stub friends. Their addresses are per-chain (see chains.ts): Anvil test accounts
+// locally, dedicated testnet wallets on Celo Sepolia. Picking them as keyholders
+// wires real on-chain keys that can approve an early unlock. In production these
+// become the friends' own real wallets.
 const FAKE_FRIENDS: Friend[] = [
-  { id: "ana", name: "Ana", address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" },
-  { id: "luis", name: "Luis", address: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" },
+  { id: "ana", name: "Ana", address: FRIEND_ADDRESSES.ana },
+  { id: "luis", name: "Luis", address: FRIEND_ADDRESSES.luis },
 ];
 
 let SHARED_VAULTS: Vault[] = [
@@ -474,10 +483,24 @@ export async function getVaultKeyholders(id: string): Promise<VaultKeyholder[]> 
   }));
 }
 
-/** DEV-ONLY: approve an early unlock AS a given keyholder (their Anvil account),
- *  to drive the friend-approves-unlock flow locally. One approval unlocks. */
+/** DEV/TEST: approve an early unlock AS a given keyholder, to drive the
+ *  friend-approves-unlock flow. Locally we sign client-side with the public Anvil
+ *  key; on testnet the keyholder's key is server-only, so we sign via the
+ *  /api/dev/approve-as route (key never reaches the client). One approval unlocks. */
 export async function devApproveAsKeyholder(id: string, keyholder: string): Promise<void> {
-  await approveEarlyExitAs(BigInt(id), keyholder as Address);
+  if (isLocalChain) {
+    await approveEarlyExitAs(BigInt(id), keyholder as Address);
+    return;
+  }
+  const res = await fetch("/api/dev/approve-as", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, keyholder }),
+  });
+  if (!res.ok) {
+    const e = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(e.error ?? "approve-as failed");
+  }
 }
 
 /** Live unlock check for a solo vault (goal/deadline/approvals). */
