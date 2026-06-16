@@ -47,10 +47,12 @@ const CHAIN_CONFIG: Record<
       // Our SavingsVaults deploy output — set via env after deploying; "0x" until
       // then so writes fail fast rather than hit a wrong address.
       savingsVaults: (process.env.NEXT_PUBLIC_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
-      // USDm (Mento dollar) on Celo Sepolia — verified from Celo docs. The vault's
-      // immutable token: 18 decimals, and it's its own fee-currency adapter so gas
-      // can be paid in USDm (MiniPay fee abstraction).
-      token: "0xEF4d55D6dE8e8d73232827Cd1e9b2F2dBb45bC80",
+      // USDm (Mento dollar) on Celo Sepolia — the LIVE, liquid Mento stablecoin
+      // (symbol "USDm"), verified via the Mento on-chain registry/SDK. (Note: the
+      // 0xEF4d… address some docs list is a legacy "cUSD" token with no Mento
+      // liquidity — don't use it.) 18 decimals; its own fee-currency adapter so
+      // gas can be paid in USDm (MiniPay fee abstraction).
+      token: "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b",
     },
   },
 };
