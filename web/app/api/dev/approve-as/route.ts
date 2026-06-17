@@ -23,8 +23,11 @@ function keyFor(addr: string): `0x${string}` | undefined {
 }
 
 export async function POST(request: Request) {
-  if (process.env.NEXT_PUBLIC_CHAIN !== "celoSepolia") {
-    return Response.json({ error: "approve-as is testnet-only" }, { status: 403 });
+  // OFF unless explicitly enabled AND on testnet. Safe to deploy on a public URL
+  // (it does nothing) until ENABLE_DEV_APPROVE=true is set — and it must never be
+  // enabled on a mainnet/production deploy (it signs with embedded keys).
+  if (process.env.ENABLE_DEV_APPROVE !== "true" || process.env.NEXT_PUBLIC_CHAIN !== "celoSepolia") {
+    return Response.json({ error: "dev approve-as is disabled" }, { status: 403 });
   }
   const { id, keyholder } = (await request.json()) as { id?: string; keyholder?: string };
   if (id == null || !keyholder) {
