@@ -73,6 +73,7 @@ const en = {
     presetCustom: "Custom",
     friendsLabel: "Friends with keys",
     friendsHint: "They hold a key to approve an early unlock",
+    noFriends: "No friends yet — add them on the Friends tab.",
     unlockNote:
       "Funds unlock either when the goal is met, the timer ends, or when a friend unlocks the vault for you.",
     summaryTitle: "Preview",
@@ -99,14 +100,6 @@ const en = {
     yourFriends: "Your friends",
     empty: "No friends yet — add one above.",
     remove: "Remove",
-  },
-
-  friendDetail: {
-    back: "Friends",
-    titlePrefix: "Friend:",
-    progress: "[ their Vault progress ]",
-    statusLine: "[ goal · progress · on-pace status ]",
-    cheer: "👏 Cheer them on",
   },
 
   vaultDetail: {
@@ -235,6 +228,7 @@ const es: typeof en = {
     presetCustom: "Personalizado",
     friendsLabel: "Amigos con llave",
     friendsHint: "Tienen una llave para aprobar una apertura anticipada",
+    noFriends: "Aún no tienes amigos — agrégalos en la pestaña Amigos.",
     unlockNote:
       "Los fondos se abren cuando alcanzas la meta, termina el temporizador, o cuando un amigo abre la alcancía por ti.",
     summaryTitle: "Vista previa",
@@ -261,14 +255,6 @@ const es: typeof en = {
     yourFriends: "Tus amigos",
     empty: "Aún no tienes amigos — agrega uno arriba.",
     remove: "Eliminar",
-  },
-
-  friendDetail: {
-    back: "Amigos",
-    titlePrefix: "Amigo:",
-    progress: "[ su progreso de Alcancía ]",
-    statusLine: "[ meta · progreso · estado de ritmo ]",
-    cheer: "👏 Anímalo",
   },
 
   vaultDetail: {

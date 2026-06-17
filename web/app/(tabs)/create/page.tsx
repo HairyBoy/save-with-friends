@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
@@ -305,6 +306,15 @@ export default function CreateVaultScreen() {
                     className="h-9 w-24 animate-pulse rounded-xl border border-white/60 bg-white/60"
                   />
                 ))
+              : friendOptions.length === 0
+              ? (
+                  <Link
+                    href="/friends"
+                    className="rounded-xl border border-dashed border-primary/40 bg-white/60 px-3 py-2 text-sm font-medium text-primary-dark backdrop-blur-md"
+                  >
+                    {t.create.noFriends}
+                  </Link>
+                )
               : friendOptions.map((f) => {
                   const on = friends.includes(f.id);
                   return (
