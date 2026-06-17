@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@/components/WalletProvider";
 import {
+  addFriend,
   getBalances,
   getDailyPrize,
   getFriends,
+  removeFriend,
   getSavingsSummary,
   getChainNow,
   getVault,
@@ -122,7 +124,9 @@ export function useVault(id: string) {
   return { ...state, reload };
 }
 
-/** The user's friends (the social graph), for the Friends screen. */
+/** The user's friends (the social graph), for the Friends + Create screens.
+ *  `add`/`remove` mutate the local list and update in place. `add` throws
+ *  "invalid-address" if the address doesn't parse (the caller validates first). */
 export function useFriends() {
   const [friends, setFriends] = useState<Friend[] | null>(null);
 
@@ -136,7 +140,14 @@ export function useFriends() {
     };
   }, []);
 
-  return { friends: friends ?? [], isLoading: friends === null };
+  const add = useCallback((name: string, address: string) => {
+    setFriends(addFriend(name, address));
+  }, []);
+  const remove = useCallback((id: string) => {
+    setFriends(removeFriend(id));
+  }, []);
+
+  return { friends: friends ?? [], isLoading: friends === null, add, remove };
 }
 
 /** Today's prize + this user's odds, for the Prize screen. */

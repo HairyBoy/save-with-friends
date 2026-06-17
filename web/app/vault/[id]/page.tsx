@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
+import { useWallet } from "@/components/WalletProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useVault, useWalletBalance } from "@/hooks/useVaults";
 import {
   acceptInvite,
+  approveUnlock,
   declineInvite,
   depositToVault,
   devApproveAsKeyholder,
@@ -33,6 +35,7 @@ export default function VaultDetailScreen() {
   const router = useRouter();
   const { vault, unlocked, chainNow, keyholders, isLoading, reload } = useVault(id);
   const { balance, reload: reloadWallet } = useWalletBalance();
+  const { address } = useWallet();
 
   const [depositing, setDepositing] = useState(false);
   const [amount, setAmount] = useState("");
@@ -67,6 +70,14 @@ export default function VaultDetailScreen() {
       : t.vaultDetail.aFriend;
   const isPendingInvite = vault?.shared && vault.inviteStatus === "pending";
   const isSolo = vault != null && !vault.shared;
+  // Who's viewing this solo vault? A keyholder (a friend who can approve), the
+  // owner (deposits/withdraws), or a stranger with the link. The contract bars the
+  // owner from being a keyholder, so the two never overlap.
+  const me = address?.toLowerCase();
+  const isKeyholder = !!me && keyholders.some((k) => k.address.toLowerCase() === me);
+  const isOwner = !!me && vault?.ownerAddress?.toLowerCase() === me;
+  const isKeyholderView = isSolo && isKeyholder && !isOwner;
+  const isViewerOnly = isSolo && !!me && !isOwner && !isKeyholder;
 
   const depositNum = Number(amount);
   const overBalance = balance !== null && depositNum > balance;
@@ -130,9 +141,35 @@ export default function VaultDetailScreen() {
     setDepositing(true);
   }
 
-  function requestUnlock() {
+  async function requestUnlock() {
     setError(null);
-    setNote(keyholders.length > 0 ? t.vaultDetail.unlockAsk : t.vaultDetail.noKeyholders);
+    if (keyholders.length === 0) {
+      setNote(t.vaultDetail.noKeyholders);
+      return;
+    }
+    // The owner shares this vault's link with a keyholder out-of-band; the keyholder
+    // opens it and approves from their own wallet. Copy the link to make that easy.
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+    } catch {
+      /* clipboard may be unavailable; the note still explains the flow */
+    }
+    setNote(t.vaultDetail.unlockAsk);
+  }
+
+  // A keyholder approves the early unlock from their OWN connected wallet.
+  async function approveUnlockSelf() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await approveUnlock(id);
+      reload(); // approvals >= threshold → unlocked
+    } catch {
+      setError(t.vaultDetail.approveUnlockError);
+    } finally {
+      setBusy(false);
+    }
   }
 
   // DEV: approve the early unlock as one of the keyholders (their Anvil account).
@@ -292,6 +329,30 @@ export default function VaultDetailScreen() {
                 {t.vaultDetail.decline}
               </button>
             </>
+          ) : isKeyholderView ? (
+            unlocked ? (
+              <p className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 px-4 py-3 text-center text-sm text-primary-dark">
+                {t.vaultDetail.approveUnlockDone}
+              </p>
+            ) : (
+              <>
+                <p className="rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-center text-sm text-neutral-600 shadow-sm backdrop-blur-md">
+                  {t.vaultDetail.keyholderNote}
+                </p>
+                <button
+                  type="button"
+                  onClick={approveUnlockSelf}
+                  disabled={busy}
+                  className={primaryBtn}
+                >
+                  {busy ? t.vaultDetail.processing : t.vaultDetail.approveUnlock}
+                </button>
+              </>
+            )
+          ) : isViewerOnly ? (
+            <p className="rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-center text-sm text-neutral-500 shadow-sm backdrop-blur-md">
+              {t.vaultDetail.viewerNote}
+            </p>
           ) : depositing ? (
             <div className="flex flex-col gap-3 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
               <p className="text-sm font-semibold">{t.vaultDetail.depositTitle}</p>

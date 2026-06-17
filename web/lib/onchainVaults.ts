@@ -208,3 +208,21 @@ export async function approveEarlyExitAs(id: bigint, keyholder: Address): Promis
   });
   await send(hash);
 }
+
+/**
+ * A keyholder approves an early exit from THEIR OWN connected wallet — the real
+ * production path (no custody, no server signing). The connected wallet must be a
+ * keyholder of the vault (the contract enforces it; the owner can't self-approve).
+ * Solo threshold is 1, so a single approval unlocks. On Celo, gas is paid in the
+ * stablecoin via FEE_OPTS, so the friend needs no CELO.
+ */
+export async function approveEarlyExit(id: bigint): Promise<void> {
+  const wallet = getWalletClient();
+  const hash = await wallet.writeContract({
+    ...vaultsContract,
+    functionName: "approveEarlyExit",
+    args: [id],
+    ...FEE_OPTS,
+  });
+  await send(hash);
+}

@@ -14,7 +14,6 @@
 
 import { formatUnits, parseUnits, zeroAddress, type Address } from "viem";
 import {
-  FRIEND_ADDRESSES,
   getActiveAccount,
   isLocalChain,
   isTestEnv,
@@ -22,6 +21,7 @@ import {
 } from "@/lib/chains";
 import {
   advanceChainTime,
+  approveEarlyExit as approveEarlyExitOnchain,
   approveEarlyExitAs,
   createSoloVault as createSoloVaultOnchain,
   deposit as depositOnchain,
@@ -35,6 +35,12 @@ import {
   readVault,
   type OnchainVault,
 } from "@/lib/onchainVaults";
+import { friendName, getStoredFriends, type Friend } from "@/lib/friends";
+
+// The friends list (who you can pick as keyholders) lives in lib/friends; re-export
+// its surface here so every screen still reads the social graph through this seam.
+export type { Friend };
+export { addFriend, removeFriend } from "@/lib/friends";
 
 // Whether local-only dev affordances (the time-travel panel) should be available.
 export const IS_DEV_CHAIN = isLocalChain;
@@ -67,6 +73,7 @@ export type Vault = {
   yieldEarned: number; // earned by the agent while locked
   createdAt: string; // ISO yyyy-mm-dd
   shared: boolean;
+  ownerAddress?: Address; // solo: the on-chain owner — tells an owner viewer apart from a keyholder
   keyholders?: string[]; // solo: friend ids who can approve an early unlock
   // Shared-only:
   splitMode?: SplitMode; // how funds split when the vault unlocks
@@ -87,8 +94,6 @@ export type DailyPrize = {
   yourEntries: number; // your raffle entries (1 per $1 locked today)
   totalEntries: number; // everyone's entries today
 };
-
-export type Friend = { id: string; name: string; address?: Address };
 
 // The connected user's address: the local dev account on Anvil, or the connected
 // MiniPay wallet on Celo. Falls back to the zero address before a wallet connects
@@ -146,6 +151,7 @@ function mapSoloVault(id: bigint, v: OnchainVault): Vault {
     yieldEarned: 0, // no yield in v1
     createdAt: meta?.createdAt ?? unixToIsoDate(v.deadline),
     shared: false,
+    ownerAddress: v.owner,
     keyholders: meta?.keyholderFriendIds ?? [],
   };
 }
@@ -163,15 +169,6 @@ async function getOnchainSoloVaults(): Promise<Vault[]> {
 }
 
 // --- shared vaults (in-memory stub; ids namespaced "shared-…") --------------
-
-// Stub friends. Their addresses are per-chain (see chains.ts): Anvil test accounts
-// locally, dedicated testnet wallets on Celo Sepolia. Picking them as keyholders
-// wires real on-chain keys that can approve an early unlock. In production these
-// become the friends' own real wallets.
-const FAKE_FRIENDS: Friend[] = [
-  { id: "ana", name: "Ana", address: FRIEND_ADDRESSES.ana },
-  { id: "luis", name: "Luis", address: FRIEND_ADDRESSES.luis },
-];
 
 let SHARED_VAULTS: Vault[] = [
   {
@@ -346,7 +343,7 @@ export async function getDailyPrize(): Promise<DailyPrize> {
 }
 
 export async function getFriends(): Promise<Friend[]> {
-  return FAKE_FRIENDS;
+  return getStoredFriends();
 }
 
 export type NewVaultInput = {
@@ -419,7 +416,7 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
         { id: CURRENT_USER_ID, name: "You", contributed: input.deposit, accepted: true },
         ...input.friendIds.map((fid) => ({
           id: fid,
-          name: FAKE_FRIENDS.find((f) => f.id === fid)?.name ?? fid,
+          name: getStoredFriends().find((f) => f.id === fid)?.name ?? fid,
           contributed: 0,
           accepted: false,
         })),
@@ -434,7 +431,7 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
   // one of them can approve an early unlock (solo threshold = 1). Friends without
   // an address are skipped. Picks are also saved as metadata for display.
   const keyholders = input.friendIds
-    .map((fid) => FAKE_FRIENDS.find((f) => f.id === fid)?.address)
+    .map((fid) => getStoredFriends().find((f) => f.id === fid)?.address)
     .filter((a): a is Address => Boolean(a));
   const id = await createSoloVaultOnchain({
     goal: parseUnits(String(input.goal), TOKEN_DECIMALS),
@@ -475,12 +472,14 @@ export type VaultKeyholder = { address: string; name: string };
 export async function getVaultKeyholders(id: string): Promise<VaultKeyholder[]> {
   if (id.startsWith("shared-")) return []; // shared keys are a v2 concern
   const addrs = await readKeyholders(BigInt(id));
-  return addrs.map((a) => ({
-    address: a,
-    name:
-      FAKE_FRIENDS.find((f) => f.address?.toLowerCase() === a.toLowerCase())?.name ??
-      `${a.slice(0, 6)}…${a.slice(-4)}`,
-  }));
+  return addrs.map((a) => ({ address: a, name: friendName(a) }));
+}
+
+/** A keyholder approves an early unlock from their OWN connected wallet — the real
+ *  production path. The viewer must be a keyholder of this vault (the contract
+ *  enforces it; the owner can't self-approve). One approval unlocks a solo vault. */
+export async function approveUnlock(id: string): Promise<void> {
+  await approveEarlyExitOnchain(BigInt(id));
 }
 
 /** DEV/TEST: approve an early unlock AS a given keyholder, to drive the
