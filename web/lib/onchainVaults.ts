@@ -8,10 +8,11 @@
 import { erc20Abi, parseEventLogs, type Address, type Hash } from "viem";
 import {
   CONTRACTS,
+  FEE_OPTS,
   getDevKeyholderWalletClient,
   getDevTestClient,
-  getDevWalletClient,
   getPublicClient,
+  getWalletClient,
 } from "@/lib/chains";
 import { savingsVaultsAbi } from "@/lib/savingsVaultsAbi";
 
@@ -92,32 +93,40 @@ export async function readKeyholders(id: bigint): Promise<Address[]> {
 }
 
 // --- writes ----------------------------------------------------------------
-// All writes go through the dev wallet for now (local Anvil). When MiniPay is
-// wired, swap getDevWalletClient() for the injected wallet client; the call
-// shapes are identical.
+// Writes go through getWalletClient(): the local dev wallet on Anvil, or the
+// injected MiniPay wallet on Celo. FEE_OPTS pays gas in USDm on Celo (no CELO
+// needed by the user); it's empty on Anvil.
 
 async function send(hash: Hash) {
-  // Block until mined so callers can read fresh state right after.
-  return getPublicClient().waitForTransactionReceipt({ hash });
+  // Block until mined so callers can read fresh state right after. viem resolves
+  // even for reverted txns, so check the status explicitly and surface a failure
+  // (otherwise a reverted deposit/withdraw would look like success to the UI).
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  if (receipt.status === "reverted") {
+    throw new Error("Transaction reverted on-chain");
+  }
+  return receipt;
 }
 
 /** ERC20 approve so the vault can pull `amount` of the token from the owner. */
 export async function approveToken(amount: bigint): Promise<void> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const hash = await wallet.writeContract({
     address: CONTRACTS.token,
     abi: erc20Abi,
     functionName: "approve",
     args: [CONTRACTS.savingsVaults, amount],
+    ...FEE_OPTS,
   });
   await send(hash);
 }
 
 /**
- * Create a solo vault and fund it with an initial deposit, end to end:
- * approve → createVault → deposit. Returns the new on-chain vault id (parsed
- * from the VaultCreated event). `deadline` is unix seconds and MUST be > now
- * (the contract enforces the liveness backstop).
+ * Create a solo vault and fund it in ONE on-chain call: approve → createVault
+ * (with initialDeposit). Just two transactions (down from three), and no
+ * brittle create-then-deposit sequencing — the contract pulls the deposit
+ * atomically inside createVault. Returns the new id (from the VaultCreated
+ * event). `deadline` is unix seconds and MUST be > now (contract enforces it).
  */
 export async function createSoloVault(args: {
   goal: bigint;
@@ -125,18 +134,20 @@ export async function createSoloVault(args: {
   deposit: bigint;
   keyholders: Address[];
 }): Promise<bigint> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const publicClient = getPublicClient();
 
-  // Approve enough for the initial deposit before creating.
+  // Approve the initial deposit so createVault can pull it in the same tx.
   if (args.deposit > 0n) await approveToken(args.deposit);
 
   const createHash = await wallet.writeContract({
     ...vaultsContract,
     functionName: "createVault",
-    args: [args.goal, args.deadline, args.keyholders],
+    args: [args.goal, args.deadline, args.keyholders, args.deposit],
+    ...FEE_OPTS,
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
+  if (receipt.status === "reverted") throw new Error("createVault reverted on-chain");
 
   const [created] = parseEventLogs({
     abi: savingsVaultsAbi,
@@ -144,30 +155,29 @@ export async function createSoloVault(args: {
     logs: receipt.logs,
   });
   if (!created) throw new Error("VaultCreated event missing from receipt");
-  const id = created.args.id;
-
-  if (args.deposit > 0n) await deposit(id, args.deposit);
-  return id;
+  return created.args.id;
 }
 
 /** Add funds to a vault (owner-only). Caller must have approved first. */
 export async function deposit(id: bigint, amount: bigint): Promise<void> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const hash = await wallet.writeContract({
     ...vaultsContract,
     functionName: "deposit",
     args: [id, amount],
+    ...FEE_OPTS,
   });
   await send(hash);
 }
 
 /** Withdraw the full balance once unlocked (closes the vault). */
 export async function withdraw(id: bigint): Promise<void> {
-  const wallet = getDevWalletClient();
+  const wallet = getWalletClient();
   const hash = await wallet.writeContract({
     ...vaultsContract,
     functionName: "withdraw",
     args: [id],
+    ...FEE_OPTS,
   });
   await send(hash);
 }

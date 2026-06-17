@@ -13,6 +13,7 @@ import {
   devApproveAsKeyholder,
   devFastForward,
   IS_DEV_CHAIN,
+  IS_TEST_ENV,
   vaultPayout,
   withdrawVault,
 } from "@/lib/vaults";
@@ -261,9 +262,9 @@ export default function VaultDetailScreen() {
             </section>
           )}
 
-          {/* DEV-ONLY: approve the early unlock as a keyholder (their Anvil acct),
-              to drive the friend-unlocks flow. Hidden once already unlocked. */}
-          {IS_DEV_CHAIN && isSolo && !unlocked && keyholders.length > 0 && (
+          {/* DEV/TEST: approve the early unlock as a keyholder (signs client-side
+              locally, via /api/dev/approve-as on testnet). Hidden once unlocked. */}
+          {IS_TEST_ENV && isSolo && !unlocked && keyholders.length > 0 && (
             <section className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/60 p-3">
               <p className="text-xs font-semibold text-neutral-500">{t.vaultDetail.devApproveAs}</p>
               <div className="mt-2 flex flex-wrap gap-2">

@@ -52,9 +52,31 @@ contract SavingsVaults is ReentrancyGuard {
         token = _token;
     }
 
-    /// @notice Create a solo vault. Funds it later via deposit().
+    /// @notice Create a solo vault (unfunded). Fund it later via deposit().
     function createVault(uint256 goal, uint64 deadline, address[] calldata keyholders)
         external
+        returns (uint256 id)
+    {
+        return _createVault(goal, deadline, keyholders);
+    }
+
+    /// @notice Create a solo vault AND fund it with `initialDeposit` in one tx (the
+    /// owner must approve `initialDeposit` first). Lets the client open a funded
+    /// vault without a separate deposit transaction. `initialDeposit` may be 0.
+    function createVault(
+        uint256 goal,
+        uint64 deadline,
+        address[] calldata keyholders,
+        uint256 initialDeposit
+    ) external nonReentrant returns (uint256 id) {
+        id = _createVault(goal, deadline, keyholders);
+        if (initialDeposit > 0) {
+            _deposit(id, initialDeposit);
+        }
+    }
+
+    function _createVault(uint256 goal, uint64 deadline, address[] calldata keyholders)
+        internal
         returns (uint256 id)
     {
         require(goal > 0, "goal=0");
@@ -84,6 +106,10 @@ contract SavingsVaults is ReentrancyGuard {
 
     /// @notice Owner adds funds. Credited by measured balance delta (token-quirk safe).
     function deposit(uint256 id, uint256 amount) external nonReentrant {
+        _deposit(id, amount);
+    }
+
+    function _deposit(uint256 id, uint256 amount) internal {
         Vault storage v = vaults[id];
         require(msg.sender == v.owner, "not owner"); // owner-only: a stranger can't force-unlock your goal
         require(!v.closed, "closed");

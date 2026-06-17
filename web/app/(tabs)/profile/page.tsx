@@ -4,13 +4,16 @@ import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
+import { useWallet } from "@/components/WalletProvider";
 import { useBalances } from "@/hooks/useVaults";
 
 // Profile / Me — reached via the home avatar (back action in the top bar).
-// Account hint, money balances, settings, legal, support.
+// Connected account, money balances, settings, legal, support.
 export default function ProfileScreen() {
   const { t, lang } = useLanguage();
   const { balances } = useBalances();
+  const { address, isConnected, isMiniPay, isConnecting } = useWallet();
+  const shortAddr = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : null;
 
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
@@ -28,8 +31,21 @@ export default function ProfileScreen() {
 
       <div className="flex flex-col gap-5 px-5 py-6">
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
-          <p className="text-sm font-medium">{t.profile.account}</p>
-          <p className="text-sm text-neutral-500">{t.profile.addressHint}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">{t.profile.account}</p>
+            {isMiniPay && (
+              <span className="rounded-full bg-primary-tint px-2 py-0.5 text-xs font-medium text-primary-dark">
+                MiniPay
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-sm text-neutral-500">
+            {isConnecting
+              ? t.profile.connecting
+              : isConnected && shortAddr
+                ? shortAddr
+                : t.profile.notConnected}
+          </p>
         </section>
 
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
