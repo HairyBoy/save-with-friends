@@ -7,6 +7,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useWallet } from "@/components/WalletProvider";
 import { useBalances, useMyName } from "@/hooks/useVaults";
+import { CONTACT_EMAIL } from "@/lib/legal";
 
 // Profile / Me — reached via the home avatar (back action in the top bar).
 // Connected account, money balances, settings, legal, support.
@@ -119,12 +120,27 @@ export default function ProfileScreen() {
             <p className="text-sm font-medium">{t.profile.language}</p>
             <LanguageToggle />
           </div>
-          <p className="rounded-2xl border border-white/60 bg-white/60 p-4 text-sm shadow-sm backdrop-blur-md">
-            {t.profile.terms}
-          </p>
-          <p className="rounded-2xl border border-white/60 bg-white/60 p-4 text-sm shadow-sm backdrop-blur-md">
-            {t.profile.support}
-          </p>
+          <Link
+            href="/terms"
+            className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/60 p-4 text-sm shadow-sm backdrop-blur-md transition hover:bg-white/80"
+          >
+            <span>{t.profile.terms}</span>
+            <span aria-hidden className="text-neutral-400">›</span>
+          </Link>
+          <Link
+            href="/privacy"
+            className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/60 p-4 text-sm shadow-sm backdrop-blur-md transition hover:bg-white/80"
+          >
+            <span>{t.profile.privacy}</span>
+            <span aria-hidden className="text-neutral-400">›</span>
+          </Link>
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/60 p-4 text-sm shadow-sm backdrop-blur-md transition hover:bg-white/80"
+          >
+            <span>{t.profile.support}</span>
+            <span aria-hidden className="text-neutral-400">›</span>
+          </a>
         </section>
 
         <Link href="/onboarding" className="text-center text-sm text-neutral-400 underline">
