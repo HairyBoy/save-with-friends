@@ -73,6 +73,7 @@ const en = {
     presetCustom: "Custom",
     friendsLabel: "Friends with keys",
     friendsHint: "They hold a key to approve an early unlock",
+    noFriends: "No friends yet — add them on the Friends tab.",
     unlockNote:
       "Funds unlock either when the goal is met, the timer ends, or when a friend unlocks the vault for you.",
     summaryTitle: "Preview",
@@ -89,18 +90,16 @@ const en = {
 
   friends: {
     title: "Friends",
-    pendingApprovals: "Pending approvals",
-    pendingBody: "[ a friend asked to unlock early — approve or decline ]",
-    activity: "Friends' activity",
-    recentActivity: "[ recent Vault activity ]",
-  },
-
-  friendDetail: {
-    back: "Friends",
-    titlePrefix: "Friend:",
-    progress: "[ their Vault progress ]",
-    statusLine: "[ goal · progress · on-pace status ]",
-    cheer: "👏 Cheer them on",
+    intro:
+      "Add friends by their wallet address, then pick them as keyholders when you create a vault. A keyholder can approve an early unlock from their own wallet.",
+    addTitle: "Add a friend",
+    nicknamePlaceholder: "Nickname (e.g. Ana)",
+    addressPlaceholder: "Wallet address (0x…)",
+    add: "Add friend",
+    invalidAddress: "Enter a valid wallet address (0x…).",
+    yourFriends: "Your friends",
+    empty: "No friends yet — add one above.",
+    remove: "Remove",
   },
 
   vaultDetail: {
@@ -124,8 +123,14 @@ const en = {
     processing: "Working…",
     depositError: "Couldn't add funds. Please try again.",
     withdrawError: "Couldn't withdraw. Please try again.",
-    unlockAsk: "Asked your keyholders to unlock — any one of them can approve it.",
+    unlockAsk:
+      "Vault link copied — share it with a keyholder. Any one of them can approve the unlock from their own wallet.",
     noKeyholders: "No friends hold a key to this vault.",
+    approveUnlock: "Approve unlock",
+    approveUnlockDone: "Unlocked — thanks for approving.",
+    approveUnlockError: "Couldn't approve. Please try again.",
+    keyholderNote: "You hold a key to this vault. Approving unlocks it so the owner can withdraw.",
+    viewerNote: "You're viewing a friend's vault.",
     devTimeTravel: "Dev: time travel",
     devApproveAs: "Dev: approve as keyholder",
     approveAs: "Approve as",
@@ -223,6 +228,7 @@ const es: typeof en = {
     presetCustom: "Personalizado",
     friendsLabel: "Amigos con llave",
     friendsHint: "Tienen una llave para aprobar una apertura anticipada",
+    noFriends: "Aún no tienes amigos — agrégalos en la pestaña Amigos.",
     unlockNote:
       "Los fondos se abren cuando alcanzas la meta, termina el temporizador, o cuando un amigo abre la alcancía por ti.",
     summaryTitle: "Vista previa",
@@ -239,18 +245,16 @@ const es: typeof en = {
 
   friends: {
     title: "Amigos",
-    pendingApprovals: "Aprobaciones pendientes",
-    pendingBody: "[ un amigo pidió abrir antes — aprueba o rechaza ]",
-    activity: "Actividad de tus amigos",
-    recentActivity: "[ actividad reciente de Alcancías ]",
-  },
-
-  friendDetail: {
-    back: "Amigos",
-    titlePrefix: "Amigo:",
-    progress: "[ su progreso de Alcancía ]",
-    statusLine: "[ meta · progreso · estado de ritmo ]",
-    cheer: "👏 Anímalo",
+    intro:
+      "Agrega amigos con su dirección de billetera y luego elígelos como llaveros al crear una alcancía. Un llavero puede aprobar una apertura anticipada desde su propia billetera.",
+    addTitle: "Agregar un amigo",
+    nicknamePlaceholder: "Apodo (ej. Ana)",
+    addressPlaceholder: "Dirección de billetera (0x…)",
+    add: "Agregar amigo",
+    invalidAddress: "Ingresa una dirección de billetera válida (0x…).",
+    yourFriends: "Tus amigos",
+    empty: "Aún no tienes amigos — agrega uno arriba.",
+    remove: "Eliminar",
   },
 
   vaultDetail: {
@@ -274,8 +278,14 @@ const es: typeof en = {
     processing: "Procesando…",
     depositError: "No se pudieron agregar fondos. Inténtalo de nuevo.",
     withdrawError: "No se pudo retirar. Inténtalo de nuevo.",
-    unlockAsk: "Les pedimos a tus llaveros que la abran — cualquiera puede aprobarla.",
+    unlockAsk:
+      "Enlace de la alcancía copiado — compártelo con un llavero. Cualquiera puede aprobar la apertura desde su propia billetera.",
     noKeyholders: "Ningún amigo tiene una llave de esta alcancía.",
+    approveUnlock: "Aprobar apertura",
+    approveUnlockDone: "Abierta — gracias por aprobar.",
+    approveUnlockError: "No se pudo aprobar. Inténtalo de nuevo.",
+    keyholderNote: "Tienes una llave de esta alcancía. Al aprobar, se abre para que el dueño pueda retirar.",
+    viewerNote: "Estás viendo la alcancía de un amigo.",
     devTimeTravel: "Dev: viajar en el tiempo",
     devApproveAs: "Dev: aprobar como llavero",
     approveAs: "Aprobar como",
