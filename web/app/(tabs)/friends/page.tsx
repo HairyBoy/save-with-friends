@@ -21,11 +21,11 @@ export default function FriendsScreen() {
   const fieldClass =
     "w-full rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-sm shadow-sm backdrop-blur-md outline-none transition placeholder:text-neutral-400 focus:border-primary/50";
 
-  function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     try {
-      add(nickname, address);
+      await add(nickname, address);
       setNickname("");
       setAddress("");
     } catch {

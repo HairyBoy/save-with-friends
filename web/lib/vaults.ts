@@ -14,6 +14,7 @@
 
 import { formatUnits, parseUnits, zeroAddress, type Address } from "viem";
 import {
+  activeChain,
   getActiveAccount,
   isLocalChain,
   isTestEnv,
@@ -35,12 +36,15 @@ import {
   readVault,
   type OnchainVault,
 } from "@/lib/onchainVaults";
-import { friendName, getStoredFriends, type Friend } from "@/lib/friends";
+import { addFriend, friendName, getFriends, removeFriend, type Friend } from "@/lib/friends";
 
 // The friends list (who you can pick as keyholders) lives in lib/friends; re-export
 // its surface here so every screen still reads the social graph through this seam.
 export type { Friend };
-export { addFriend, removeFriend } from "@/lib/friends";
+export { addFriend, getFriends, removeFriend };
+
+// The active chain id scopes synced vault metadata (names/emojis) per chain.
+const CHAIN_ID = activeChain.id;
 
 // Whether local-only dev affordances (the time-travel panel) should be available.
 export const IS_DEV_CHAIN = isLocalChain;
@@ -102,27 +106,38 @@ function currentUser(): Address {
   return getActiveAccount() ?? zeroAddress;
 }
 
-// --- off-chain vault metadata (name/emoji/created/keyholder picks) ----------
-// localStorage-backed, keyed by on-chain vault id. Per-device for now.
+// --- off-chain vault metadata (name/emoji), synced via /api/vault-meta -------
+// The contract doesn't store a vault's name/emoji; we keep it in the DB keyed by
+// (chain, vault id) so it follows the user across devices and a keyholder opening
+// the vault link sees the real name. Reads are batched; writes are best-effort.
 
-type VaultMeta = {
-  name: string;
-  icon: string;
-  createdAt: string; // ISO yyyy-mm-dd
-  keyholderFriendIds: string[]; // the friends the owner picked (display only for now)
-};
+type VaultMeta = { name: string; icon: string; createdAt: string | null };
 
-const META_PREFIX = "vault-meta:";
-
-function readMeta(id: string): VaultMeta | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(META_PREFIX + id);
-  return raw ? (JSON.parse(raw) as VaultMeta) : null;
+async function fetchVaultMeta(ids: string[]): Promise<Map<string, VaultMeta>> {
+  const map = new Map<string, VaultMeta>();
+  if (ids.length === 0) return map;
+  try {
+    const res = await fetch(`/api/vault-meta?chainId=${CHAIN_ID}&ids=${ids.join(",")}`);
+    if (res.ok) {
+      const rows = (await res.json()) as { id: string; name: string; icon: string; createdAt: string | null }[];
+      for (const r of rows) map.set(r.id, { name: r.name, icon: r.icon, createdAt: r.createdAt });
+    }
+  } catch {
+    /* best-effort — the UI falls back to default name/icon */
+  }
+  return map;
 }
 
-function writeMeta(id: string, meta: VaultMeta): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(META_PREFIX + id, JSON.stringify(meta));
+async function writeVaultMeta(id: string, name: string, icon: string, createdAt: string): Promise<void> {
+  try {
+    await fetch("/api/vault-meta", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chainId: CHAIN_ID, vaultId: id, owner: currentUser(), name, icon, createdAt }),
+    });
+  } catch {
+    /* best-effort — the vault exists on-chain regardless; the name can be re-set */
+  }
 }
 
 // --- on-chain solo vault <-> UI Vault ---------------------------------------
@@ -135,10 +150,10 @@ function toUsd(wei: bigint): number {
   return Number(formatUnits(wei, TOKEN_DECIMALS));
 }
 
-// Map an on-chain solo vault (+ its localStorage metadata) into the UI shape.
-function mapSoloVault(id: bigint, v: OnchainVault): Vault {
+// Map an on-chain solo vault (+ its synced metadata) into the UI shape. The meta is
+// fetched in batch by the caller and passed in, so this stays synchronous.
+function mapSoloVault(id: bigint, v: OnchainVault, meta?: VaultMeta): Vault {
   const idStr = id.toString();
-  const meta = readMeta(idStr);
   return {
     id: idStr,
     name: meta?.name ?? "Vault",
@@ -152,17 +167,18 @@ function mapSoloVault(id: bigint, v: OnchainVault): Vault {
     createdAt: meta?.createdAt ?? unixToIsoDate(v.deadline),
     shared: false,
     ownerAddress: v.owner,
-    keyholders: meta?.keyholderFriendIds ?? [],
+    keyholders: [], // keyholders are read on-chain (getVaultKeyholders), not from meta
   };
 }
 
 // Read every (non-closed) solo vault the current user owns, newest first.
 async function getOnchainSoloVaults(): Promise<Vault[]> {
   const ids = await readOwnerVaultIds(currentUser());
+  const metaMap = await fetchVaultMeta(ids.map((id) => id.toString()));
   const vaults = await Promise.all(
     ids.map(async (id) => {
       const v = await readVault(id);
-      return v.closed ? null : mapSoloVault(id, v);
+      return v.closed ? null : mapSoloVault(id, v, metaMap.get(id.toString()));
     }),
   );
   return vaults.filter((v): v is Vault => v !== null).reverse();
@@ -227,7 +243,8 @@ export async function getVault(id: string): Promise<Vault | null> {
   }
   const v = await readVault(BigInt(id));
   if (v.owner === "0x0000000000000000000000000000000000000000") return null; // no such vault
-  return mapSoloVault(BigInt(id), v);
+  const metaMap = await fetchVaultMeta([id]);
+  return mapSoloVault(BigInt(id), v, metaMap.get(id));
 }
 
 /**
@@ -342,10 +359,6 @@ export async function getDailyPrize(): Promise<DailyPrize> {
   };
 }
 
-export async function getFriends(): Promise<Friend[]> {
-  return getStoredFriends();
-}
-
 export type NewVaultInput = {
   name: string;
   icon: string;
@@ -395,6 +408,9 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
     throw new Error("a deadline is required"); // the form enforces this; belt-and-suspenders
   }
 
+  // The picked friends (their on-chain addresses + names) for keyholders/invites.
+  const friends = await getFriends();
+
   if (input.shared) {
     // --- shared stub (in-memory) ---
     const id = `shared-${nextSharedId++}`;
@@ -416,7 +432,7 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
         { id: CURRENT_USER_ID, name: "You", contributed: input.deposit, accepted: true },
         ...input.friendIds.map((fid) => ({
           id: fid,
-          name: getStoredFriends().find((f) => f.id === fid)?.name ?? fid,
+          name: friends.find((f) => f.id === fid)?.name ?? fid,
           contributed: 0,
           accepted: false,
         })),
@@ -431,7 +447,7 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
   // one of them can approve an early unlock (solo threshold = 1). Friends without
   // an address are skipped. Picks are also saved as metadata for display.
   const keyholders = input.friendIds
-    .map((fid) => getStoredFriends().find((f) => f.id === fid)?.address)
+    .map((fid) => friends.find((f) => f.id === fid)?.address)
     .filter((a): a is Address => Boolean(a));
   const id = await createSoloVaultOnchain({
     goal: parseUnits(String(input.goal), TOKEN_DECIMALS),
@@ -441,15 +457,11 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
   });
 
   const idStr = id.toString();
-  writeMeta(idStr, {
-    name: input.name,
-    icon: input.icon,
-    createdAt: new Date().toISOString().slice(0, 10),
-    keyholderFriendIds: input.friendIds,
-  });
+  const createdAt = new Date().toISOString().slice(0, 10);
+  await writeVaultMeta(idStr, input.name, input.icon, createdAt);
 
   const v = await readVault(id);
-  return mapSoloVault(id, v);
+  return mapSoloVault(id, v, { name: input.name, icon: input.icon, createdAt });
 }
 
 // --- solo vault actions (on-chain) — for the detail screen's buttons --------
@@ -471,8 +483,8 @@ export type VaultKeyholder = { address: string; name: string };
 /** The friends who hold a key to a solo vault (on-chain addresses → names). */
 export async function getVaultKeyholders(id: string): Promise<VaultKeyholder[]> {
   if (id.startsWith("shared-")) return []; // shared keys are a v2 concern
-  const addrs = await readKeyholders(BigInt(id));
-  return addrs.map((a) => ({ address: a, name: friendName(a) }));
+  const [addrs, friends] = await Promise.all([readKeyholders(BigInt(id)), getFriends()]);
+  return addrs.map((a) => ({ address: a, name: friendName(a, friends) }));
 }
 
 /** A keyholder approves an early unlock from their OWN connected wallet — the real

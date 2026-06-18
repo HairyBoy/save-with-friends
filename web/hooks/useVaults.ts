@@ -128,6 +128,7 @@ export function useVault(id: string) {
  *  `add`/`remove` mutate the local list and update in place. `add` throws
  *  "invalid-address" if the address doesn't parse (the caller validates first). */
 export function useFriends() {
+  const { address } = useWallet();
   const [friends, setFriends] = useState<Friend[] | null>(null);
 
   useEffect(() => {
@@ -138,13 +139,13 @@ export function useFriends() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [address]);
 
-  const add = useCallback((name: string, address: string) => {
-    setFriends(addFriend(name, address));
+  const add = useCallback(async (name: string, friendAddress: string) => {
+    setFriends(await addFriend(name, friendAddress));
   }, []);
-  const remove = useCallback((id: string) => {
-    setFriends(removeFriend(id));
+  const remove = useCallback(async (id: string) => {
+    setFriends(await removeFriend(id));
   }, []);
 
   return { friends: friends ?? [], isLoading: friends === null, add, remove };
