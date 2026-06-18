@@ -104,6 +104,12 @@ await O.page.fill('input[placeholder^="Wallet address"]', ANA_ADDRESS);
 await O.page.getByRole("button", { name: "Add friend" }).click();
 await O.page.waitForSelector(`text=${ANA_ADDRESS.slice(0, 6)}…${ANA_ADDRESS.slice(-4)}`, { timeout: 15000 });
 check(true, "1. OWNER added Ana as a friend by address (appears in list)");
+// Phase 2: the friend persisted to the DB (not localStorage) — read it back over the API.
+const friendRows = await (await fetch(`${BASE}/api/friends?owner=${accounts.owner.address.toLowerCase()}`)).json();
+check(
+  Array.isArray(friendRows) && friendRows.some((f) => f.address.toLowerCase() === ANA_ADDRESS.toLowerCase()),
+  "1. friend persisted to the DB (GET /api/friends returns Ana)",
+);
 
 await O.page.goto(`${BASE}/create`, { waitUntil: "networkidle" });
 await O.page.fill("#v-name", "Self unlock");
@@ -154,6 +160,9 @@ await A.page.waitForSelector("text=Unlock Conditions");
 const anaApprove = A.page.getByRole("button", { name: "Approve unlock", exact: true });
 check(await anaApprove.isVisible(), "4. ANA (keyholder) sees the real 'Approve unlock' button");
 check((await A.page.getByRole("button", { name: "Deposit" }).count()) === 0, "4. ANA does NOT see Deposit (she's not the owner)");
+// Phase 2: the keyholder sees the OWNER's vault name (synced via DB, public read) —
+// not the generic "Vault" fallback.
+check((await A.page.locator("text=Self unlock").count()) > 0, "4. ANA sees the owner's vault NAME 'Self unlock' (vault-meta synced via DB, public read)");
 await anaApprove.click();
 await A.page.waitForSelector("text=thanks for approving", { timeout: 120000 });
 const vA = await pub.readContract({ address: VAULT, abi, functionName: "getVault", args: [id] });
@@ -170,6 +179,15 @@ await pub.waitForTransactionReceipt({ hash: h2 });
 const vDbl = await pub.readContract({ address: VAULT, abi, functionName: "getVault", args: [id] });
 check(vDbl.approvals === 1, `5. a redundant approve by ANA is an idempotent no-op (approvals still ${vDbl.approvals} — can't inflate threshold)`);
 
+// Phase 2 ADVERSARIAL: a vault-meta write by a NON-owner is rejected (the route
+// verifies vault ownership on-chain before accepting a rename).
+const badMeta = await fetch(`${BASE}/api/vault-meta`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ chainId: 11142220, vaultId: id.toString(), owner: accounts.luis.address, name: "hacked", icon: "💀" }),
+});
+check(badMeta.status === 403, `5. a vault-meta rename by a non-owner (LUIS) is rejected (${badMeta.status} — on-chain owner check)`);
+
 // --- 6. OWNER withdraws (recover funds) ---
 await O.page.goto(url, { waitUntil: "networkidle" });
 await O.page.waitForSelector("text=Unlock Conditions");
@@ -178,6 +196,13 @@ await O.page.waitForURL(`${BASE}/`, { timeout: 120000 });
 await new Promise((r) => setTimeout(r, 4000));
 const vF = await pub.readContract({ address: VAULT, abi, functionName: "getVault", args: [id] });
 check(vF.closed && vF.saved === 0n, `6. OWNER withdrew — vault closed=${vF.closed}, saved=${vF.saved} (deposit recovered)`);
+
+// Cleanup: remove the test friend so each run starts fresh (idempotent anyway).
+await fetch(`${BASE}/api/friends`, {
+  method: "DELETE",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ owner: accounts.owner.address, address: ANA_ADDRESS }),
+});
 
 const allErrors = [...O.errors, ...L.errors, ...A.errors];
 check(allErrors.length === 0, `console/page errors: ${allErrors.length ? allErrors.join(" | ") : "none"}`);
