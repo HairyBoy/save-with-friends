@@ -36,12 +36,19 @@ import {
   readVault,
   type OnchainVault,
 } from "@/lib/onchainVaults";
-import { addFriend, friendName, getFriends, removeFriend, type Friend } from "@/lib/friends";
+import {
+  addFriend,
+  addFriendByPhone,
+  friendName,
+  getFriends,
+  removeFriend,
+  type Friend,
+} from "@/lib/friends";
 
 // The friends list (who you can pick as keyholders) lives in lib/friends; re-export
 // its surface here so every screen still reads the social graph through this seam.
 export type { Friend };
-export { addFriend, getFriends, removeFriend };
+export { addFriend, addFriendByPhone, getFriends, removeFriend };
 
 // The active chain id scopes synced vault metadata (names/emojis) per chain.
 const CHAIN_ID = activeChain.id;

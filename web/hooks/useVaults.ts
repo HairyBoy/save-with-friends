@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@/components/WalletProvider";
 import {
   addFriend,
+  addFriendByPhone,
   getBalances,
   getDailyPrize,
   getFriends,
@@ -144,11 +145,14 @@ export function useFriends() {
   const add = useCallback(async (name: string, friendAddress: string) => {
     setFriends(await addFriend(name, friendAddress));
   }, []);
+  const addByPhone = useCallback(async (name: string, phone: string) => {
+    setFriends(await addFriendByPhone(name, phone));
+  }, []);
   const remove = useCallback(async (id: string) => {
     setFriends(await removeFriend(id));
   }, []);
 
-  return { friends: friends ?? [], isLoading: friends === null, add, remove };
+  return { friends: friends ?? [], isLoading: friends === null, add, addByPhone, remove };
 }
 
 /** Today's prize + this user's odds, for the Prize screen. */

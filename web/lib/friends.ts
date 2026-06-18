@@ -56,6 +56,23 @@ export async function addFriend(name: string, address: string): Promise<Friend[]
   return getFriends();
 }
 
+/** Add a friend by PHONE number — resolves it to an address via ODIS (server-side),
+ *  then adds that address. Throws "phone-not-configured" (ODIS off), "phone-unresolved"
+ *  (nobody attested for that number), or "resolve-failed". MiniPay-proper identity;
+ *  real resolution is mainnet-only (see lib/odis.ts). */
+export async function addFriendByPhone(name: string, phone: string): Promise<Friend[]> {
+  const res = await fetch("/api/resolve-phone", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone }),
+  });
+  if (res.status === 503) throw new Error("phone-not-configured");
+  const data = (await res.json().catch(() => ({}))) as { address?: string | null; error?: string };
+  if (!res.ok) throw new Error(data.error ?? "resolve-failed");
+  if (!data.address) throw new Error("phone-unresolved");
+  return addFriend(name, data.address);
+}
+
 /** Remove a friend by id (their lowercased address). Returns the refreshed list. */
 export async function removeFriend(id: string): Promise<Friend[]> {
   const me = owner();

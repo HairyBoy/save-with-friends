@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@celo/abis": "^14.0.1",
+    "@celo/contractkit": "^11.0.0",
+    "@celo/identity": "^5.1.2",
     "@neondatabase/serverless": "^1.1.0",
     "next": "16.2.7",
     "react": "^19.2.7",

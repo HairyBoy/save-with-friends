@@ -100,6 +100,11 @@ const en = {
     yourFriends: "Your friends",
     empty: "No friends yet — add one above.",
     remove: "Remove",
+    modeAddress: "Address",
+    modePhone: "Phone",
+    phonePlaceholder: "Phone number (+57…)",
+    phoneUnresolved: "No MiniPay account found for that number.",
+    phoneUnavailable: "Adding by phone isn't available yet.",
   },
 
   vaultDetail: {
@@ -255,6 +260,11 @@ const es: typeof en = {
     yourFriends: "Tus amigos",
     empty: "Aún no tienes amigos — agrega uno arriba.",
     remove: "Eliminar",
+    modeAddress: "Dirección",
+    modePhone: "Teléfono",
+    phonePlaceholder: "Número de teléfono (+57…)",
+    phoneUnresolved: "No se encontró ninguna cuenta de MiniPay para ese número.",
+    phoneUnavailable: "Agregar por teléfono aún no está disponible.",
   },
 
   vaultDetail: {
