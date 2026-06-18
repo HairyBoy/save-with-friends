@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@/components/WalletProvider";
 import {
-  addFriend,
   getBalances,
   getDailyPrize,
   getFriends,
+  getMyName,
+  setMyName,
   removeFriend,
   getSavingsSummary,
   getChainNow,
@@ -124,12 +125,12 @@ export function useVault(id: string) {
   return { ...state, reload };
 }
 
-/** The user's friends (the social graph), for the Friends + Create screens.
- *  `add`/`remove` mutate the local list and update in place. `add` throws
- *  "invalid-address" if the address doesn't parse (the caller validates first). */
+/** The user's friends (the social graph), for the Friends + Create screens. Friends
+ *  are added via invite links (not here); `remove` drops one from your list. */
 export function useFriends() {
   const { address } = useWallet();
   const [friends, setFriends] = useState<Friend[] | null>(null);
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -139,16 +140,40 @@ export function useFriends() {
     return () => {
       active = false;
     };
-  }, [address]);
+  }, [address, nonce]);
 
-  const add = useCallback(async (name: string, friendAddress: string) => {
-    setFriends(await addFriend(name, friendAddress));
-  }, []);
   const remove = useCallback(async (id: string) => {
     setFriends(await removeFriend(id));
   }, []);
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
 
-  return { friends: friends ?? [], isLoading: friends === null, add, remove };
+  return { friends: friends ?? [], isLoading: friends === null, remove, reload };
+}
+
+/** Your own display name (the identity everyone sees). `save` sets it; null = unset. */
+export function useMyName() {
+  const { address } = useWallet();
+  const [state, setState] = useState<{ name: string | null; isLoading: boolean }>({
+    name: null,
+    isLoading: true,
+  });
+
+  useEffect(() => {
+    let active = true;
+    getMyName().then((n) => {
+      if (active) setState({ name: n, isLoading: false });
+    });
+    return () => {
+      active = false;
+    };
+  }, [address]);
+
+  const save = useCallback(async (next: string) => {
+    await setMyName(next);
+    setState((s) => ({ ...s, name: next.trim() }));
+  }, []);
+
+  return { name: state.name, isLoading: state.isLoading, save };
 }
 
 /** Today's prize + this user's odds, for the Prize screen. */

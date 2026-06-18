@@ -8,7 +8,7 @@ separate package so Playwright stays out of the app's dependencies.
 These are **manual** (not CI): they need testnet secrets and spend a little test USDC
 (fully recovered — each test withdraws what it deposits, so net cost is ~cents of gas).
 
-## `friend-self-unlock.mjs` — Phase 1 friend-keys
+## `friend-invite-unlock.mjs` — Phase 1 friend-keys
 
 Proves the keyholder-approves-from-their-own-wallet flow and its access control:
 
@@ -33,7 +33,7 @@ npx playwright install chromium      # one-time browser download
 ( cd ../web && npm run build && npx next start -p 7951 )   # in another shell
 
 # Run, loading secrets from the gitignored env files (Node 22+ multi --env-file):
-node --env-file=../web/.env.local --env-file=../contracts/.env.deployer friend-self-unlock.mjs
+node --env-file=../web/.env.local --env-file=../contracts/.env.deployer friend-invite-unlock.mjs
 ```
 
 ### Env vars

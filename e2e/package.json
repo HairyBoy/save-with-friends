@@ -5,9 +5,10 @@
   "version": "1.0.0",
   "description": "Manual testnet end-to-end tests for Save with Friends (kept out of the app's deps).",
   "scripts": {
-    "test:friend-unlock": "node friend-self-unlock.mjs"
+    "test:friend-unlock": "node friend-invite-unlock.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "playwright": "^1.60.0",
     "viem": "^2.52.0"
   }

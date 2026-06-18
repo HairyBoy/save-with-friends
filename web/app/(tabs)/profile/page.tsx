@@ -1,19 +1,31 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useWallet } from "@/components/WalletProvider";
-import { useBalances } from "@/hooks/useVaults";
+import { useBalances, useMyName } from "@/hooks/useVaults";
 
 // Profile / Me — reached via the home avatar (back action in the top bar).
 // Connected account, money balances, settings, legal, support.
 export default function ProfileScreen() {
   const { t, lang } = useLanguage();
   const { balances } = useBalances();
-  const { address, isConnected, isMiniPay, isConnecting } = useWallet();
-  const shortAddr = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : null;
+  const { isConnected, isMiniPay, isConnecting } = useWallet();
+  const { name, save } = useMyName();
+
+  // Show the loaded name until the user edits (draft takes over) — no effect syncing.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState(false);
+  const nameValue = draft ?? name ?? "";
+
+  async function saveName() {
+    if (!nameValue.trim()) return;
+    await save(nameValue);
+    setSavedNote(true);
+  }
 
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
@@ -39,13 +51,37 @@ export default function ProfileScreen() {
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-sm text-neutral-500">
-            {isConnecting
-              ? t.profile.connecting
-              : isConnected && shortAddr
-                ? shortAddr
-                : t.profile.notConnected}
+          <p className="mt-0.5 text-xs text-neutral-400">
+            {isConnecting ? t.profile.connecting : isConnected ? t.profile.connected : t.profile.notConnected}
           </p>
+
+          {/* Your name — the identity friends and keyholders see (no addresses). */}
+          <label htmlFor="me-name" className="mt-3 block text-sm font-medium text-neutral-700">
+            {t.profile.yourName}
+          </label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              id="me-name"
+              type="text"
+              maxLength={40}
+              value={nameValue}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setSavedNote(false);
+              }}
+              placeholder={t.profile.yourNamePlaceholder}
+              className="w-full rounded-2xl border border-white/60 bg-white/70 px-4 py-2.5 text-sm outline-none transition placeholder:text-neutral-400 focus:border-primary/50"
+            />
+            <button
+              type="button"
+              onClick={saveName}
+              disabled={!nameValue.trim()}
+              className="shrink-0 rounded-2xl bg-primary px-4 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {t.profile.save}
+            </button>
+          </div>
+          {savedNote && <p className="mt-1 text-xs text-primary-dark">{t.profile.nameSaved}</p>}
         </section>
 
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">

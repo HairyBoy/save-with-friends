@@ -5,32 +5,44 @@ import Link from "next/link";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarAvatarClass } from "@/components/TopBar";
 import { useFriends } from "@/hooks/useVaults";
-import { shortAddress } from "@/lib/friends";
+import { mintInvite } from "@/lib/vaults";
 
-// Friends — your social graph. Add a friend by their wallet address (+ a nickname);
-// you then pick them as keyholders when creating a vault, and they approve an early
-// unlock from their own wallet. Per-device for now (Phase 1, no backend).
+// Friends — your social graph. You add friends by sharing an invite link (they tap
+// it, their wallet connects, you're mutually connected). No addresses are ever typed
+// or shown; everyone appears by the name they set on the Me tab.
 export default function FriendsScreen() {
   const { t } = useLanguage();
-  const { friends, isLoading, add, remove } = useFriends();
-
-  const [nickname, setNickname] = useState("");
-  const [address, setAddress] = useState("");
+  const { friends, isLoading, remove } = useFriends();
+  const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const fieldClass =
-    "w-full rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-sm shadow-sm backdrop-blur-md outline-none transition placeholder:text-neutral-400 focus:border-primary/50";
-
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
+  async function invite() {
+    setNote(null);
     setError(null);
+    setBusy(true);
+    let url: string;
     try {
-      await add(nickname, address);
-      setNickname("");
-      setAddress("");
-    } catch {
-      setError(t.friends.invalidAddress);
+      url = await mintInvite();
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      setError(
+        m === "set-your-name-first" ? t.friends.setNameFirst : m === "no-wallet" ? t.friends.connectFirst : t.friends.inviteFailed,
+      );
+      setBusy(false);
+      return;
     }
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: t.onboarding.brand, text: t.friends.shareText, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setNote(t.friends.linkCopied);
+      }
+    } catch {
+      /* user canceled the share sheet — nothing to do */
+    }
+    setBusy(false);
   }
 
   return (
@@ -49,39 +61,17 @@ export default function FriendsScreen() {
           <p className="text-sm text-neutral-600">{t.friends.intro}</p>
         </section>
 
-        {/* Add a friend by wallet address */}
-        <form
-          onSubmit={handleAdd}
-          className="flex flex-col gap-3 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md"
+        {/* Invite a friend (share a link) */}
+        <button
+          type="button"
+          onClick={invite}
+          disabled={busy}
+          className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 text-center text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition disabled:opacity-50"
         >
-          <p className="text-sm font-semibold">{t.friends.addTitle}</p>
-          <input
-            type="text"
-            value={nickname}
-            maxLength={40}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder={t.friends.nicknamePlaceholder}
-            className={fieldClass}
-          />
-          <input
-            type="text"
-            value={address}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder={t.friends.addressPlaceholder}
-            className={`${fieldClass} font-mono`}
-          />
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <button
-            type="submit"
-            disabled={address.trim() === ""}
-            className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-3 text-center text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-          >
-            {t.friends.add}
-          </button>
-        </form>
+          {`🔗 ${t.friends.invite}`}
+        </button>
+        {note && <p className="text-center text-xs text-primary-dark">{note}</p>}
+        {error && <p className="text-center text-xs text-red-500">{error}</p>}
 
         {/* Your friends */}
         <section className="flex flex-col gap-2.5">
@@ -106,10 +96,7 @@ export default function FriendsScreen() {
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-tint text-lg">
                   👤
                 </span>
-                <span className="flex flex-1 flex-col">
-                  <span className="text-sm font-medium">{f.name}</span>
-                  <span className="font-mono text-xs text-neutral-400">{shortAddress(f.address)}</span>
-                </span>
+                <span className="flex-1 text-sm font-medium">{f.name || t.friends.unnamedFriend}</span>
                 <button
                   type="button"
                   onClick={() => remove(f.id)}

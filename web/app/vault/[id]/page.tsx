@@ -66,7 +66,7 @@ export default function VaultDetailScreen() {
   // to names); falls back to a generic label when none were picked.
   const friendLabel =
     keyholders.length > 0
-      ? keyholders.map((k) => k.name).join(", ")
+      ? keyholders.map((k) => k.name ?? t.vaultDetail.aFriend).join(", ")
       : t.vaultDetail.aFriend;
   const isPendingInvite = vault?.shared && vault.inviteStatus === "pending";
   const isSolo = vault != null && !vault.shared;
@@ -313,7 +313,7 @@ export default function VaultDetailScreen() {
                     disabled={busy}
                     className="flex-1 rounded-xl border border-neutral-200 bg-white/70 px-2 py-2 text-xs font-medium text-neutral-600 disabled:opacity-50"
                   >
-                    {t.vaultDetail.approveAs} {k.name}
+                    {t.vaultDetail.approveAs} {k.name ?? t.vaultDetail.aFriend}
                   </button>
                 ))}
               </div>

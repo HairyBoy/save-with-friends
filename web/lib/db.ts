@@ -47,6 +47,26 @@ export function ensureSchema(): Promise<void> {
         updated_at    timestamptz not null default now(),
         primary key (chain_id, vault_id)
       )`;
+      // Self-chosen display name per wallet — the single source of identity. Every
+      // place a person is shown (friends list, keyholder, invite) reads this; raw
+      // addresses are never surfaced.
+      await sql`create table if not exists users (
+        address      text primary key,
+        display_name text not null,
+        updated_at   timestamptz not null default now()
+      )`;
+      // Invite links: a token carries the inviter (name resolved from users) and an
+      // optional vault context (future per-vault join). Accepting writes a mutual
+      // friendship.
+      await sql`create table if not exists invites (
+        token           text primary key,
+        inviter_address text not null,
+        vault_id        text,
+        created_at      timestamptz not null default now(),
+        expires_at      timestamptz
+      )`;
+      // Friendships are now pure edges; names come from users (no typed nicknames).
+      await sql`alter table friends alter column nickname drop not null`;
     })().catch((e) => {
       _schemaReady = null; // let a later request retry the bootstrap
       throw e;
