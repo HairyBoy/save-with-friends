@@ -1,16 +1,27 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarAvatarClass } from "@/components/TopBar";
 import { useSavings } from "@/hooks/useVaults";
 import type { Vault } from "@/lib/vaults";
 
 // My Vaults (home). Two stats + agent update, then vaults grouped into solo
-// ("Your Vaults") and "Shared Vaults" (pending invites flagged).
+// ("Your Vaults") and "Shared Vaults" (pending invites flagged). First-run lands on
+// /onboarding (to pick language + set a display name); deep links like /invite/[token]
+// are NOT gated, so an invitee goes straight to accepting.
 export default function MyVaultsScreen() {
   const { t, lang } = useLanguage();
   const { vaults, summary, isLoading } = useSavings();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && !localStorage.getItem("swf-onboarded")) {
+      router.replace("/onboarding");
+    }
+  }, [router]);
 
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });

@@ -36,12 +36,21 @@ import {
   readVault,
   type OnchainVault,
 } from "@/lib/onchainVaults";
-import { addFriend, friendName, getFriends, removeFriend, type Friend } from "@/lib/friends";
+import { getFriends as loadFriends, resolveNames } from "@/lib/friends";
 
-// The friends list (who you can pick as keyholders) lives in lib/friends; re-export
-// its surface here so every screen still reads the social graph through this seam.
-export type { Friend };
-export { addFriend, getFriends, removeFriend };
+// The social graph lives in lib/friends; re-export its surface here so every screen
+// reads it through this seam. Friends are added only by invite link (no add-by-address),
+// and shown by self-chosen display names — addresses are never surfaced.
+export type { Friend, InviteInfo } from "@/lib/friends";
+export {
+  getFriends,
+  removeFriend,
+  getMyName,
+  setMyName,
+  mintInvite,
+  getInvite,
+  acceptFriendInvite,
+} from "@/lib/friends";
 
 // The active chain id scopes synced vault metadata (names/emojis) per chain.
 const CHAIN_ID = activeChain.id;
@@ -409,7 +418,7 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
   }
 
   // The picked friends (their on-chain addresses + names) for keyholders/invites.
-  const friends = await getFriends();
+  const friends = await loadFriends();
 
   if (input.shared) {
     // --- shared stub (in-memory) ---
@@ -478,13 +487,15 @@ export async function withdrawVault(id: string): Promise<void> {
   await withdrawOnchain(BigInt(id));
 }
 
-export type VaultKeyholder = { address: string; name: string };
+export type VaultKeyholder = { address: string; name: string | null };
 
-/** The friends who hold a key to a solo vault (on-chain addresses → names). */
+/** The friends who hold a key to a solo vault, resolved to display names (null when
+ *  the keyholder hasn't set a name — the UI shows a generic "a friend", never a 0x). */
 export async function getVaultKeyholders(id: string): Promise<VaultKeyholder[]> {
   if (id.startsWith("shared-")) return []; // shared keys are a v2 concern
-  const [addrs, friends] = await Promise.all([readKeyholders(BigInt(id)), getFriends()]);
-  return addrs.map((a) => ({ address: a, name: friendName(a, friends) }));
+  const addrs = await readKeyholders(BigInt(id));
+  const names = await resolveNames(addrs);
+  return addrs.map((a) => ({ address: a, name: names[a.toLowerCase()] ?? null }));
 }
 
 /** A keyholder approves an early unlock from their OWN connected wallet — the real
