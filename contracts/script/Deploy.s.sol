@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Script, console} from "forge-std/Script.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SavingsVaults} from "../src/SavingsVaults.sol";
+import {SharedVaults} from "../src/SharedVaults.sol";
 import {MockERC20} from "../test/mocks/MockERC20.sol";
 
 /// @notice Deploys SavingsVaults bound to a stablecoin (immutable at deploy).
@@ -43,11 +44,13 @@ contract Deploy is Script {
         }
 
         SavingsVaults vaults = new SavingsVaults(IERC20(token));
+        SharedVaults shared = new SharedVaults(IERC20(token));
 
         vm.stopBroadcast();
 
         console.log("Token (vault stablecoin):", token);
         console.log("SavingsVaults:           ", address(vaults));
+        console.log("SharedVaults:            ", address(shared));
         console.log("Deployer:                ", msg.sender);
     }
 }

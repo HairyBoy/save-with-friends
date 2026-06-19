@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarAvatarClass } from "@/components/TopBar";
-import { useSavings } from "@/hooks/useVaults";
+import { useSavings, useSharedVaults } from "@/hooks/useVaults";
 import type { Vault } from "@/lib/vaults";
+import type { SharedVault } from "@/lib/sharedVaults";
 
 // My Vaults (home). Two stats + agent update, then vaults grouped into solo
 // ("Your Vaults") and "Shared Vaults" (pending invites flagged). First-run lands on
@@ -26,8 +27,8 @@ export default function MyVaultsScreen() {
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
 
-  const soloVaults = vaults.filter((v) => !v.shared);
-  const sharedVaults = vaults.filter((v) => v.shared);
+  const soloVaults = vaults; // getVaults is solo-only now
+  const { sharedVaults } = useSharedVaults();
 
   // A solo or accepted-shared vault: icon, name (+ members for shared), progress.
   function progressCard(v: Vault) {
@@ -44,11 +45,6 @@ export default function MyVaultsScreen() {
           </span>
           <div className="flex-1">
             <p className="text-sm font-medium">{v.name}</p>
-            {v.shared && (
-              <p className="text-xs text-neutral-500">
-                👥 {v.members?.length ?? 0} {t.home.members}
-              </p>
-            )}
           </div>
           <span className="text-sm font-medium text-neutral-500">
             ${fmt(v.saved)} / ${fmt(v.goal)}
@@ -61,26 +57,30 @@ export default function MyVaultsScreen() {
     );
   }
 
-  // A pending invite: amber-flagged, shows who invited you.
-  function pendingCard(v: Vault) {
+  // A real (group) shared vault → links to its own detail route.
+  function sharedCard(sv: SharedVault) {
+    const pct = sv.goal > 0 ? Math.min(100, Math.round((sv.saved / sv.goal) * 100)) : 0;
     return (
       <Link
-        key={v.id}
-        href={`/vault/${v.id}`}
-        className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm backdrop-blur-md"
+        key={sv.id}
+        href={`/shared/${sv.id}`}
+        className="flex flex-col gap-3 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md"
       >
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-white/70 text-lg">
-          {v.icon}
-        </span>
-        <div className="flex-1">
-          <p className="text-sm font-medium">{v.name}</p>
-          <p className="text-xs text-neutral-500">
-            {t.home.invitedBy} {v.ownerName}
-          </p>
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-tint text-lg">
+            {sv.icon}
+          </span>
+          <div className="flex-1">
+            <p className="text-sm font-medium">{sv.name}</p>
+            <p className="text-xs text-neutral-500">👥 {sv.memberCount} {t.home.members}</p>
+          </div>
+          <span className="text-sm font-medium text-neutral-500">
+            ${fmt(sv.saved)} / ${fmt(sv.goal)}
+          </span>
         </div>
-        <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-medium text-amber-800">
-          {t.home.pending}
-        </span>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-primary-tint">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+        </div>
       </Link>
     );
   }
@@ -138,9 +138,7 @@ export default function MyVaultsScreen() {
             {sharedVaults.length > 0 && (
               <section className="flex flex-col gap-2.5">
                 <p className="text-sm font-medium text-neutral-700">{t.home.sharedVaults}</p>
-                {sharedVaults.map((v) =>
-                  v.inviteStatus === "pending" ? pendingCard(v) : progressCard(v),
-                )}
+                {sharedVaults.map(sharedCard)}
               </section>
             )}
           </>

@@ -30,7 +30,7 @@ type ChainKey = "anvil" | "celoSepolia";
 
 type ChainEntry = {
   chain: Chain;
-  contracts: { savingsVaults: Address; token: Address };
+  contracts: { savingsVaults: Address; sharedVaults: Address; token: Address };
   decimals: number; // the vault token's decimals
   feeCurrency?: Address; // CIP-64 fee-currency to pay gas in (so users need no CELO)
   // The stub friends' addresses (keyholders), per chain. On Anvil these are the
@@ -46,6 +46,7 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
     // always yields these (deployer account + nonce).
     contracts: {
       savingsVaults: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+      sharedVaults: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9", // local nonce 3 (Deploy.s.sol)
       token: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     },
     decimals: 18, // MockERC20
@@ -60,6 +61,9 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       // Our SavingsVaults deploy output — set via env after deploying; "0x" until
       // then so writes fail fast rather than hit a wrong address.
       savingsVaults: (process.env.NEXT_PUBLIC_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
+      // Deployed + verified SharedVaults on Celo Sepolia (env-overridable).
+      sharedVaults: (process.env.NEXT_PUBLIC_SHARED_VAULTS_ADDRESS ??
+        "0xFA72C790C970F2bB76994E6a88219B4F420433e9") as Address,
       // USDC on Celo Sepolia — chosen for testnet because it's directly faucetable
       // (faucet.circle.com), unlike Mento USDm whose Sepolia pools are drained. A
       // first-class MiniPay stablecoin. The mainnet token is a separate, deliberate

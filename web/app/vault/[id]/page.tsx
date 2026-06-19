@@ -9,15 +9,12 @@ import { BalanceNotice } from "@/components/BalanceNotice";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useVault, useWalletBalance } from "@/hooks/useVaults";
 import {
-  acceptInvite,
   approveUnlock,
-  declineInvite,
   depositToVault,
   devApproveAsKeyholder,
   devFastForward,
   IS_DEV_CHAIN,
   IS_TEST_ENV,
-  vaultPayout,
   withdrawVault,
 } from "@/lib/vaults";
 
@@ -26,10 +23,9 @@ const primaryBtn =
 const secondaryBtn =
   "rounded-2xl border border-white/60 bg-white/60 p-4 text-center text-sm font-medium shadow-sm backdrop-blur-md disabled:opacity-50";
 
-// Vault detail (full-screen push, no tab bar). Shared vaults show their members
-// and split mode; a pending invite shows the details + Accept / Decline. For a
-// solo (on-chain) vault: Deposit, Withdraw (once unlocked), and a dev-only
-// time-travel panel to fast-forward the chain past the deadline.
+// Solo vault detail (full-screen push, no tab bar). Deposit, Withdraw (once
+// unlocked), a keyholder's "Approve unlock", and a dev-only time-travel panel.
+// (Group vaults have their own screen at /shared/[id].)
 export default function VaultDetailScreen() {
   const { t, lang } = useLanguage();
   const { id } = useParams<{ id: string }>();
@@ -69,8 +65,7 @@ export default function VaultDetailScreen() {
     keyholders.length > 0
       ? keyholders.map((k) => k.name ?? t.vaultDetail.aFriend).join(", ")
       : t.vaultDetail.aFriend;
-  const isPendingInvite = vault?.shared && vault.inviteStatus === "pending";
-  const isSolo = vault != null && !vault.shared;
+  const isSolo = vault != null;
   // Who's viewing this solo vault? A keyholder (a friend who can approve), the
   // owner (deposits/withdraws), or a stranger with the link. The contract bars the
   // owner from being a keyholder, so the two never overlap.
@@ -83,16 +78,6 @@ export default function VaultDetailScreen() {
   const depositNum = Number(amount);
   const overBalance = balance !== null && depositNum > balance;
   const depositValid = amount.trim() !== "" && depositNum > 0 && !overBalance;
-
-  async function accept() {
-    await acceptInvite(id);
-    router.push("/");
-  }
-
-  async function decline() {
-    await declineInvite(id);
-    router.push("/");
-  }
 
   async function confirmDeposit() {
     if (!depositValid || busy) return;
@@ -211,40 +196,6 @@ export default function VaultDetailScreen() {
           <p className="mt-2 text-xs font-medium text-neutral-500">{pct}%</p>
         </section>
 
-        {/* Members + split (shared only): who put in what, and what they receive */}
-        {vault?.shared && vault.members && (
-          <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
-            <p className="text-sm font-semibold">{t.vaultDetail.members}</p>
-            {/* Column headers */}
-            <div className="mt-3 grid grid-cols-[1fr_auto_auto] items-center gap-x-4 text-xs font-medium text-neutral-400">
-              <span />
-              <span className="w-20 text-right">{t.vaultDetail.contributions}</span>
-              <span className="w-20 text-right">{t.vaultDetail.receives}</span>
-            </div>
-            <ul className="mt-1.5 flex flex-col gap-1.5">
-              {vault.members.map((m) => (
-                <li
-                  key={m.id}
-                  className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 text-sm"
-                >
-                  <span className="flex items-center gap-1.5 text-neutral-700">
-                    {m.name}
-                    {!m.accepted && (
-                      <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-medium text-amber-800">
-                        {t.home.pending}
-                      </span>
-                    )}
-                  </span>
-                  <span className="w-20 text-right text-neutral-500">${fmt(m.contributed)}</span>
-                  <span className="w-20 text-right font-medium text-primary-dark">
-                    ${fmt(vaultPayout(vault, m.id))}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
           <p className="text-sm font-semibold">{t.vaultDetail.unlockConditions}</p>
           <ul className="mt-3 flex flex-col gap-2.5 text-sm text-neutral-700">
@@ -321,16 +272,7 @@ export default function VaultDetailScreen() {
             </section>
           )}
 
-          {isPendingInvite ? (
-            <>
-              <button type="button" onClick={accept} className={primaryBtn}>
-                {t.vaultDetail.accept}
-              </button>
-              <button type="button" onClick={decline} className={secondaryBtn}>
-                {t.vaultDetail.decline}
-              </button>
-            </>
-          ) : isKeyholderView ? (
+          {isKeyholderView ? (
             unlocked ? (
               <p className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 px-4 py-3 text-center text-sm text-primary-dark">
                 {t.vaultDetail.approveUnlockDone}

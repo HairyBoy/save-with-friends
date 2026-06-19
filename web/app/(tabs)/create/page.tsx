@@ -8,6 +8,7 @@ import { BalanceNotice } from "@/components/BalanceNotice";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useFriends, useWalletBalance } from "@/hooks/useVaults";
 import { createVault } from "@/lib/vaults";
+import { createDraft } from "@/lib/sharedVaults";
 import {
   resetVaultDraft,
   setVaultDraft,
@@ -34,6 +35,13 @@ function isoFromNow({ days = 0, months = 0 }: { days?: number; months?: number }
   return d.toISOString().slice(0, 10);
 }
 
+// Whole days from now until end of the chosen day (min 1). For shared drafts, which
+// store a duration and anchor it to chain time at launch.
+function daysUntil(iso: string): number {
+  const ms = new Date(`${iso}T23:59:59`).getTime() - Date.now();
+  return Math.max(1, Math.ceil(ms / 86_400_000));
+}
+
 export default function CreateVaultScreen() {
   const { t, lang } = useLanguage();
   const router = useRouter();
@@ -50,13 +58,12 @@ export default function CreateVaultScreen() {
   // The starting amount is pulled from the wallet at create time, so it can't
   // exceed what's there (while the balance is still loading, don't block).
   const overBalance = balance !== null && depositNum > balance;
-  const valid =
-    name.trim().length > 0 &&
-    goalNum >= GOAL_MIN &&
-    depositNum >= DEPOSIT_MIN &&
-    !overBalance &&
-    deadline.trim().length > 0 && // the timer is required (the contract enforces a deadline)
-    (!shared || friends.length > 0); // a shared vault needs at least one invite
+  // Solo creates on-chain now (needs a starting deposit); shared just assembles a
+  // DRAFT (members + deposit come later, at launch), so it needs only name/goal/timer.
+  const baseValid = name.trim().length > 0 && goalNum >= GOAL_MIN && deadline.trim().length > 0;
+  const valid = shared
+    ? baseValid
+    : baseValid && depositNum >= DEPOSIT_MIN && !overBalance;
   // Flag an amount hint red once something's been typed that isn't a valid amount
   // at/above its minimum (an empty field stays neutral). `!(x >= min)` also catches
   // NaN from non-numeric input.
@@ -99,20 +106,32 @@ export default function CreateVaultScreen() {
     setSubmitting(true);
     setError(null);
     try {
-      // Solo vaults create on-chain (approve → createVault → deposit); shared is
-      // still an in-memory stub. Either way the call shape is the same.
-      await createVault({
-        name: name.trim(),
-        icon,
-        goal: goalNum,
-        deposit: depositNum,
-        deadline: deadline || null,
-        shared,
-        splitMode,
-        friendIds: friends,
-      });
-      resetVaultDraft();
-      router.push("/");
+      if (shared) {
+        // Shared → assemble a DRAFT off-chain, then the owner launches it from the
+        // assembly screen (fixed roster + deposit). splitMode carries the payout:
+        // "equal" = owner-takes-all (a group gift), else by-contribution.
+        const draftId = await createDraft({
+          name: name.trim(),
+          icon,
+          goal: goalNum,
+          deadlineDays: daysUntil(deadline),
+          payoutMode: splitMode === "equal" ? "owner-takes-all" : "by-contribution",
+        });
+        resetVaultDraft();
+        router.push(`/draft/${draftId}`);
+      } else {
+        // Solo creates on-chain in one go (approve → createVault → deposit).
+        await createVault({
+          name: name.trim(),
+          icon,
+          goal: goalNum,
+          deposit: depositNum,
+          deadline: deadline || null,
+          friendIds: friends,
+        });
+        resetVaultDraft();
+        router.push("/");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t.create.submitError);
       setSubmitting(false);
@@ -236,7 +255,8 @@ export default function CreateVaultScreen() {
           </p>
         </div>
 
-        {/* Starting amount (initial deposit, min $1) */}
+        {/* Starting amount (solo only — for shared, the owner deposits at launch) */}
+        {!shared && (
         <div className="flex flex-col gap-2">
           <label htmlFor="v-deposit" className={labelClass}>
             {t.create.depositLabel}
@@ -261,6 +281,7 @@ export default function CreateVaultScreen() {
             hintError={depositInvalid}
           />
         </div>
+        )}
 
         {/* Unlock timer */}
         <div className="flex flex-col gap-2">
@@ -292,9 +313,10 @@ export default function CreateVaultScreen() {
           )}
         </div>
 
-        {/* Friends with keys */}
+        {/* Friends with keys (solo only — shared members are assembled in the draft) */}
+        {!shared && (
         <div className="flex flex-col gap-2">
-          <p className={labelClass}>{shared ? t.create.inviteLabel : t.create.friendsLabel}</p>
+          <p className={labelClass}>{t.create.friendsLabel}</p>
           <div className="flex flex-wrap gap-2">
             {friendsLoading
               ? [0, 1].map((i) => (
@@ -332,12 +354,11 @@ export default function CreateVaultScreen() {
                   );
                 })}
           </div>
-          <p className="text-xs text-neutral-400">
-            {shared ? t.create.inviteHint : t.create.friendsHint}
-          </p>
+          <p className="text-xs text-neutral-400">{t.create.friendsHint}</p>
         </div>
+        )}
 
-        {/* Split (shared only) */}
+        {/* Payout (shared only) — splitMode carries it: equal = owner-takes-all */}
         {shared && (
           <div className="flex flex-col gap-2">
             <p className={labelClass}>{t.create.splitLabel}</p>
@@ -389,12 +410,14 @@ export default function CreateVaultScreen() {
                   ${fmt(goalNum > 0 ? goalNum : 0)} {t.create.goalCurrency}
                 </dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-neutral-500">{t.create.summaryLocked}</dt>
-                <dd className="font-medium text-primary-dark">
-                  ${fmt(depositNum > 0 ? depositNum : 0)} {t.create.goalCurrency}
-                </dd>
-              </div>
+              {!shared && (
+                <div className="flex justify-between">
+                  <dt className="text-neutral-500">{t.create.summaryLocked}</dt>
+                  <dd className="font-medium text-primary-dark">
+                    ${fmt(depositNum > 0 ? depositNum : 0)} {t.create.goalCurrency}
+                  </dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-neutral-500">{t.create.summaryUnlocksBy}</dt>
                 <dd className="font-medium text-neutral-700">{deadlineDisplay ?? "—"}</dd>
@@ -431,7 +454,7 @@ export default function CreateVaultScreen() {
           disabled={!valid || submitting}
           className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 text-center text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
         >
-          {submitting ? t.create.submitting : t.create.submit}
+          {submitting ? t.create.submitting : shared ? t.create.setUpShared : t.create.submit}
         </button>
       </form>
     </div>
