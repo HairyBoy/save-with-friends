@@ -1,7 +1,9 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { SplitMode } from "@/lib/vaults";
+
+// Shared-vault payout choice (maps to SharedVaults' payout: "equal" = owner-takes-all).
+export type SplitMode = "equal" | "contribution";
 
 export type PresetKey = "1w" | "1m" | "3m" | "custom";
 
@@ -21,7 +23,7 @@ export const DEFAULT_ICON = "🔒";
 
 const EMPTY: VaultDraft = {
   shared: false,
-  splitMode: "equal",
+  splitMode: "contribution",
   icon: DEFAULT_ICON,
   name: "",
   goal: "",

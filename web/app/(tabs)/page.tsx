@@ -27,7 +27,7 @@ export default function MyVaultsScreen() {
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
 
-  const soloVaults = vaults.filter((v) => !v.shared);
+  const soloVaults = vaults; // getVaults is solo-only now
   const { sharedVaults } = useSharedVaults();
 
   // A solo or accepted-shared vault: icon, name (+ members for shared), progress.
@@ -45,11 +45,6 @@ export default function MyVaultsScreen() {
           </span>
           <div className="flex-1">
             <p className="text-sm font-medium">{v.name}</p>
-            {v.shared && (
-              <p className="text-xs text-neutral-500">
-                👥 {v.members?.length ?? 0} {t.home.members}
-              </p>
-            )}
           </div>
           <span className="text-sm font-medium text-neutral-500">
             ${fmt(v.saved)} / ${fmt(v.goal)}

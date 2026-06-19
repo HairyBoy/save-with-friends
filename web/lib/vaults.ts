@@ -66,37 +66,20 @@ export const IS_TEST_ENV = isTestEnv;
 
 export type VaultCurrency = "USD";
 
-export type SplitMode = "equal" | "contribution";
-
-// The current user's id within a shared vault's member list.
-export const CURRENT_USER_ID = "me";
-
-export type VaultMember = {
-  id: string; // friend id; the current user is CURRENT_USER_ID
-  name: string;
-  contributed: number; // how much this member has put in
-  accepted: boolean; // false = invited but hasn't joined yet
-};
-
+// A solo (on-chain) vault in human-USD form. Group vaults are a separate type
+// (lib/sharedVaults: SharedVault).
 export type Vault = {
   id: string;
   name: string;
   icon: string; // emoji chosen at creation
-  goal: number; // target amount (the shared goal, for shared vaults)
-  saved: number; // currently locked (for shared = sum of member contributions)
+  goal: number; // target amount
+  saved: number; // currently locked
   currency: VaultCurrency;
   deadline: string | null; // ISO yyyy-mm-dd unlock date (the timer); null = no timer
-  deadlineUnix?: number; // exact unlock timestamp (unix seconds) for on-chain vaults
+  deadlineUnix?: number; // exact unlock timestamp (unix seconds)
   yieldEarned: number; // earned by the agent while locked
   createdAt: string; // ISO yyyy-mm-dd
-  shared: boolean;
-  ownerAddress?: Address; // solo: the on-chain owner — tells an owner viewer apart from a keyholder
-  keyholders?: string[]; // solo: friend ids who can approve an early unlock
-  // Shared-only:
-  splitMode?: SplitMode; // how funds split when the vault unlocks
-  members?: VaultMember[]; // contributors (incl. the owner); all must unlock
-  inviteStatus?: "accepted" | "pending"; // current user's status on this shared vault
-  ownerName?: string; // who created it / sent the invite (shown on pending)
+  ownerAddress?: Address; // the on-chain owner — tells an owner viewer apart from a keyholder
 };
 
 export type SavingsSummary = {
@@ -178,9 +161,7 @@ function mapSoloVault(id: bigint, v: OnchainVault, meta?: VaultMeta): Vault {
     deadlineUnix: Number(v.deadline),
     yieldEarned: 0, // no yield in v1
     createdAt: meta?.createdAt ?? unixToIsoDate(v.deadline),
-    shared: false,
     ownerAddress: v.owner,
-    keyholders: [], // keyholders are read on-chain (getVaultKeyholders), not from meta
   };
 }
 
@@ -197,52 +178,7 @@ async function getOnchainSoloVaults(): Promise<Vault[]> {
   return vaults.filter((v): v is Vault => v !== null).reverse();
 }
 
-// --- shared vaults (in-memory stub; ids namespaced "shared-…") --------------
-
-let SHARED_VAULTS: Vault[] = [
-  {
-    id: "shared-1",
-    name: "Beach house",
-    icon: "🏠",
-    goal: 2000,
-    saved: 700,
-    currency: "USD",
-    deadline: "2027-01-15",
-    yieldEarned: 12.4,
-    createdAt: "2026-05-01",
-    shared: true,
-    splitMode: "contribution",
-    ownerName: "You",
-    inviteStatus: "accepted",
-    members: [
-      { id: CURRENT_USER_ID, name: "You", contributed: 300, accepted: true },
-      { id: "ana", name: "Ana", contributed: 250, accepted: true },
-      { id: "luis", name: "Luis", contributed: 150, accepted: true },
-    ],
-  },
-  {
-    id: "shared-2",
-    name: "Sofía's birthday gift",
-    icon: "🎁",
-    goal: 300,
-    saved: 150,
-    currency: "USD",
-    deadline: "2026-08-20",
-    yieldEarned: 1.1,
-    createdAt: "2026-06-02",
-    shared: true,
-    splitMode: "equal",
-    ownerName: "Ana",
-    inviteStatus: "pending",
-    members: [
-      { id: "ana", name: "Ana", contributed: 90, accepted: true },
-      { id: "luis", name: "Luis", contributed: 60, accepted: true },
-      { id: CURRENT_USER_ID, name: "You", contributed: 0, accepted: false },
-    ],
-  },
-];
-
-// --- public API (signatures unchanged; solo is on-chain, shared is stub) ----
+// --- public API ------------------------------------------------------------
 
 // Solo vaults only. Shared (group) vaults are a separate contract + screen now —
 // the home reads them via useSharedVaults / lib/sharedVaults.
@@ -251,34 +187,10 @@ export async function getVaults(): Promise<Vault[]> {
 }
 
 export async function getVault(id: string): Promise<Vault | null> {
-  // Shared stub ids are non-numeric ("shared-…"); on-chain solo ids are numeric.
-  if (id.startsWith("shared-")) {
-    return SHARED_VAULTS.find((v) => v.id === id) ?? null;
-  }
   const v = await readVault(BigInt(id));
   if (v.owner === "0x0000000000000000000000000000000000000000") return null; // no such vault
   const metaMap = await fetchVaultMeta([id]);
   return mapSoloVault(BigInt(id), v, metaMap.get(id));
-}
-
-/**
- * What `memberId` receives from a vault when it unlocks (USD), by its split mode:
- * by-contribution → each member gets their own contribution back; equal → the pot
- * is divided across the accepted members. Principal only — yield shows separately.
- * Single seam for "what everyone gets back": the vault card's Receives column and
- * the Me page's "receiving from shared" both read it, so they always agree.
- * (Solo vaults: you receive your whole balance.)
- */
-export function vaultPayout(v: Vault, memberId: string): number {
-  if (!v.shared) return v.saved;
-  const members = v.members ?? [];
-  if (v.splitMode === "equal") {
-    const sharers = members.filter((m) => m.accepted);
-    if (!sharers.some((m) => m.id === memberId)) return 0; // not (yet) sharing
-    return sharers.length > 0 ? v.saved / sharers.length : 0;
-  }
-  // by contribution (default): you get back what you put in
-  return members.find((m) => m.id === memberId)?.contributed ?? 0;
 }
 
 /** Spendable money in the user's wallet (USD) — what deposits draw from. */
@@ -362,12 +274,8 @@ export type NewVaultInput = {
   goal: number;
   deposit: number; // the creator's starting amount
   deadline: string | null;
-  shared: boolean;
-  splitMode: SplitMode;
-  friendIds: string[]; // solo: keyholders · shared: invited members
+  friendIds: string[]; // keyholders who can approve an early unlock
 };
-
-let nextSharedId = 100;
 
 // Smallest gap (seconds) we leave between the on-chain deadline and the chain's
 // "now", so a freshly-created vault is always strictly in the future even if the
@@ -399,50 +307,16 @@ async function deadlineToUnix(deadline: string): Promise<bigint> {
   return chainNow + (duration > buffer ? duration : buffer);
 }
 
-// Create a vault. Solo → real on-chain create + initial deposit; shared → stub.
+// Create a solo vault: real on-chain create + initial deposit (approve → createVault).
+// The picked friends become real on-chain keyholders (their addresses), so any one of
+// them can approve an early unlock (solo threshold = 1). Friends without an address are
+// skipped. Picks are also saved as metadata for display.
 export async function createVault(input: NewVaultInput): Promise<Vault> {
   if (!input.deadline) {
     throw new Error("a deadline is required"); // the form enforces this; belt-and-suspenders
   }
-
-  // The picked friends (their on-chain addresses + names) for keyholders/invites.
   const friends = await loadFriends();
 
-  if (input.shared) {
-    // --- shared stub (in-memory) ---
-    const id = `shared-${nextSharedId++}`;
-    const vault: Vault = {
-      id,
-      name: input.name,
-      icon: input.icon,
-      goal: input.goal,
-      saved: input.deposit,
-      currency: "USD",
-      deadline: input.deadline,
-      yieldEarned: 0,
-      createdAt: new Date().toISOString().slice(0, 10),
-      shared: true,
-      splitMode: input.splitMode,
-      ownerName: "You",
-      inviteStatus: "accepted",
-      members: [
-        { id: CURRENT_USER_ID, name: "You", contributed: input.deposit, accepted: true },
-        ...input.friendIds.map((fid) => ({
-          id: fid,
-          name: friends.find((f) => f.id === fid)?.name ?? fid,
-          contributed: 0,
-          accepted: false,
-        })),
-      ],
-    };
-    SHARED_VAULTS = [...SHARED_VAULTS, vault];
-    return vault;
-  }
-
-  // --- solo: real on-chain create (approve → createVault → deposit) ---
-  // The picked friends become real on-chain keyholders (their addresses), so any
-  // one of them can approve an early unlock (solo threshold = 1). Friends without
-  // an address are skipped. Picks are also saved as metadata for display.
   const keyholders = input.friendIds
     .map((fid) => friends.find((f) => f.id === fid)?.address)
     .filter((a): a is Address => Boolean(a));
@@ -528,19 +402,4 @@ export async function devFastForward(days: number): Promise<void> {
  *  the dev chain after time-travel. Drives the dev panel's clock readout. */
 export async function getChainNow(): Promise<number> {
   return Number(await readChainNow());
-}
-
-// Accept a pending shared-vault invite (you become an accepted member).
-export async function acceptInvite(id: string): Promise<void> {
-  const vault = SHARED_VAULTS.find((v) => v.id === id);
-  if (vault?.shared && vault.inviteStatus === "pending") {
-    vault.inviteStatus = "accepted";
-    const me = vault.members?.find((m) => m.id === CURRENT_USER_ID);
-    if (me) me.accepted = true;
-  }
-}
-
-// Decline a pending invite (drop it from your list).
-export async function declineInvite(id: string): Promise<void> {
-  SHARED_VAULTS = SHARED_VAULTS.filter((v) => v.id !== id);
 }

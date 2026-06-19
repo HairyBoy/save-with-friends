@@ -126,8 +126,6 @@ export default function CreateVaultScreen() {
           goal: goalNum,
           deposit: depositNum,
           deadline: deadline || null,
-          shared: false,
-          splitMode,
           friendIds: friends,
         });
         resetVaultDraft();
