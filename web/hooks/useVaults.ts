@@ -22,6 +22,14 @@ import {
   type SavingsSummary,
   type Vault,
 } from "@/lib/vaults";
+import {
+  getSharedVaults,
+  getSharedVault,
+  getSharedUnlocked,
+  getDraft,
+  type SharedVault,
+  type Draft,
+} from "@/lib/sharedVaults";
 
 /**
  * Home data: the user's vaults + their total saved, fetched together.
@@ -174,6 +182,69 @@ export function useMyName() {
   }, []);
 
   return { name: state.name, isLoading: state.isLoading, save };
+}
+
+/** Shared (group) vaults the user is a member of — for the home list. */
+export function useSharedVaults() {
+  const { address } = useWallet();
+  const [vaults, setVaults] = useState<SharedVault[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getSharedVaults().then((v) => {
+      if (active) setVaults(v);
+    });
+    return () => {
+      active = false;
+    };
+  }, [address]);
+
+  return { sharedVaults: vaults ?? [], isLoading: vaults === null };
+}
+
+/** One shared vault (+ its live unlock state), for the detail screen. */
+export function useSharedVault(id: string) {
+  const { address } = useWallet();
+  const [state, setState] = useState<{ vault: SharedVault | null; unlocked: boolean; isLoading: boolean }>({
+    vault: null,
+    unlocked: false,
+    isLoading: true,
+  });
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([getSharedVault(id), getSharedUnlocked(id)]).then(([vault, unlocked]) => {
+      if (active) setState({ vault, unlocked, isLoading: false });
+    });
+    return () => {
+      active = false;
+    };
+  }, [id, nonce, address]);
+
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  return { ...state, reload };
+}
+
+/** A shared-vault DRAFT (assembly stage). `draft` is undefined while loading, null
+ *  if not found. `reload()` refetches the roster after a join/remove. */
+export function useDraft(draftId: string) {
+  const { address } = useWallet();
+  const [draft, setDraft] = useState<Draft | null | undefined>(undefined);
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    getDraft(draftId).then((d) => {
+      if (active) setDraft(d);
+    });
+    return () => {
+      active = false;
+    };
+  }, [draftId, nonce, address]);
+
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  return { draft, isLoading: draft === undefined, reload };
 }
 
 /** Today's prize + this user's odds, for the Prize screen. */
