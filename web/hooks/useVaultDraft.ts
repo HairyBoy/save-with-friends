@@ -9,6 +9,7 @@ export type PresetKey = "1w" | "1m" | "3m" | "custom";
 
 export type VaultDraft = {
   shared: boolean;
+  earn: boolean; // earn Aave yield while locked (named `earn`, not `yield` — reserved word)
   splitMode: SplitMode;
   icon: string;
   name: string;
@@ -23,6 +24,7 @@ export const DEFAULT_ICON = "🔒";
 
 const EMPTY: VaultDraft = {
   shared: false,
+  earn: false,
   splitMode: "contribution",
   icon: DEFAULT_ICON,
   name: "",

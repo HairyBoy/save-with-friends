@@ -216,10 +216,12 @@ export default function VaultDetailScreen() {
           </ul>
         </section>
 
-        <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
-          <p className="text-sm font-semibold text-primary-dark">{t.vaultDetail.yieldEarned}</p>
-          <p className="mt-1 text-sm text-neutral-600">${fmt(vault?.yieldEarned ?? 0)}</p>
-        </section>
+        {vault?.earning && (
+          <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
+            <p className="text-sm font-semibold text-primary-dark">{t.vaultDetail.yieldEarned}</p>
+            <p className="mt-1 text-sm text-neutral-600">${fmt(vault?.yieldEarned ?? 0)}</p>
+          </section>
+        )}
 
         <div className="mt-auto flex flex-col gap-2.5">
           {/* DEV-ONLY: fast-forward the chain so a timer vault crosses its deadline. */}

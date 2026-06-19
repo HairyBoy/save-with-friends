@@ -32,7 +32,19 @@ type ChainKey = "anvil" | "celoSepolia" | "celo";
 
 type ChainEntry = {
   chain: Chain;
-  contracts: { savingsVaults: Address; sharedVaults: Address; token: Address };
+  contracts: {
+    savingsVaults: Address;
+    sharedVaults: Address;
+    // The Aave-yield (v3) variants. "0x" on chains without an Aave deployment
+    // (Anvil, Celo Sepolia) — the create-flow yield toggle is grayed there.
+    yieldSavingsVaults: Address;
+    yieldSharedVaults: Address;
+    token: Address;
+  };
+  // Whether Aave-backed "earning" vaults work here. True only where Aave V3 lives
+  // (Celo mainnet, or an `anvil --fork-url forno.celo.org` dev node). On testnets
+  // the toggle is shown but disabled, so the option is visibly wired pre-mainnet.
+  yieldAvailable: boolean;
   decimals: number; // the vault token's decimals
   feeCurrency?: Address; // CIP-64 fee-currency to pay gas in (so users need no CELO)
   // The stub friends' addresses (keyholders), per TEST chain. On Anvil these are the
@@ -55,8 +67,12 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
     contracts: {
       savingsVaults: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
       sharedVaults: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9", // local nonce 3 (Deploy.s.sol)
+      // No Aave on plain Anvil → no earning vaults. Use a fork node for those.
+      yieldSavingsVaults: "0x",
+      yieldSharedVaults: "0x",
       token: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     },
+    yieldAvailable: false,
     decimals: 18, // MockERC20
     friends: {
       ana: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Anvil acct 1
@@ -74,12 +90,16 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       // Deployed + verified SharedVaults on Celo Sepolia (env-overridable).
       sharedVaults: (process.env.NEXT_PUBLIC_SHARED_VAULTS_ADDRESS ??
         "0xFA72C790C970F2bB76994E6a88219B4F420433e9") as Address,
+      // No Aave on Celo Sepolia → earning vaults are unavailable here (toggle grayed).
+      yieldSavingsVaults: "0x",
+      yieldSharedVaults: "0x",
       // USDC on Celo Sepolia — chosen for testnet because it's directly faucetable
       // (faucet.circle.com), unlike Mento USDm whose Sepolia pools are drained. A
       // first-class MiniPay stablecoin. The mainnet token is a separate, deliberate
       // choice (likely USDm/cUSD or USDT) — testnet token does not commit it.
       token: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
     },
+    yieldAvailable: false,
     decimals: 6, // USDC
     // USDC's CIP-64 fee-currency adapter (6→18) — verified via FeeCurrencyDirectory.
     // Pass as feeCurrency so gas is paid in USDC and the user needs no CELO.
@@ -143,6 +163,9 @@ export const ACTIVE_RPC =
     ? `${window.location.origin}/api/rpc`
     : SERVER_RPC;
 export const CONTRACTS = CHAIN_CONFIG[CHAIN_KEY].contracts;
+// Whether Aave-backed "earning" vaults are usable on the active chain. The create
+// flow shows the yield toggle either way, but disables it (grayed) when false.
+export const YIELD_AVAILABLE = CHAIN_CONFIG[CHAIN_KEY].yieldAvailable;
 // The stub friends' keyholder addresses for the active chain.
 export const FRIEND_ADDRESSES = CHAIN_CONFIG[CHAIN_KEY].friends;
 
