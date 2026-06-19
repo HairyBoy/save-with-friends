@@ -268,30 +268,35 @@ export type KeyholderVault = {
  * own wallet. Closed/already-unlocked vaults are filtered out (nothing to do).
  */
 export async function getKeyholderVaults(): Promise<KeyholderVault[]> {
-  const ids = await readKeyholderVaultIds(currentUser());
-  if (ids.length === 0) return [];
-  const metaMap = await fetchVaultMeta(ids.map((id) => id.toString()));
-  const rows = await Promise.all(
-    ids.map(async (id) => {
-      const v = await readVault(id);
-      if (v.closed || (await readUnlocked(id))) return null; // withdrawn or already unlocked
-      return { id: id.toString(), v };
-    }),
-  );
-  const open = rows.filter((r): r is { id: string; v: OnchainVault } => r !== null);
-  if (open.length === 0) return [];
-  const names = await resolveNames(open.map((r) => r.v.owner));
-  return open.map((r) => {
-    const meta = metaMap.get(r.id);
-    return {
-      id: r.id,
-      name: meta?.name ?? "Vault",
-      icon: meta?.icon ?? "🔒",
-      ownerName: names[r.v.owner.toLowerCase()] ?? null,
-      saved: toUsd(r.v.saved),
-      goal: toUsd(r.v.goal),
-    };
-  });
+  try {
+    const ids = await readKeyholderVaultIds(currentUser());
+    if (ids.length === 0) return [];
+    const metaMap = await fetchVaultMeta(ids.map((id) => id.toString()));
+    const rows = await Promise.all(
+      ids.map(async (id) => {
+        const v = await readVault(id);
+        if (v.closed || (await readUnlocked(id))) return null; // withdrawn or already unlocked
+        return { id: id.toString(), v };
+      }),
+    );
+    const open = rows.filter((r): r is { id: string; v: OnchainVault } => r !== null);
+    if (open.length === 0) return [];
+    const names = await resolveNames(open.map((r) => r.v.owner));
+    return open.map((r) => {
+      const meta = metaMap.get(r.id);
+      return {
+        id: r.id,
+        name: meta?.name ?? "Vault",
+        icon: meta?.icon ?? "🔒",
+        ownerName: names[r.v.owner.toLowerCase()] ?? null,
+        saved: toUsd(r.v.saved),
+        goal: toUsd(r.v.goal),
+      };
+    });
+  } catch {
+    // Best-effort — a read failure here must not crash the home page.
+    return [];
+  }
 }
 
 /** Spendable money in the user's wallet (USD) — what deposits draw from. */
