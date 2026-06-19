@@ -12,6 +12,7 @@ import {
   createWalletClient,
   custom,
   defineChain,
+  formatUnits,
   http,
   type Address,
   type Chain,
@@ -40,6 +41,10 @@ type ChainEntry = {
   // OMITTED on mainnet — there real keyholders sign from their own wallets, and the
   // dev approve-as route is gated off (see isTestEnv).
   friends?: { ana: Address; luis: Address };
+  // The token the daily raffle prize is paid in (P3). Conceptually COPm; on Anvil
+  // the mock token stands in (same 18 decimals as COPm), on testnet a faucetable
+  // stand-in. `decimals` MUST match the token so a "4000 COPm" prize scales right.
+  prize: { token: Address; decimals: number };
 };
 
 const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
@@ -57,6 +62,8 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       ana: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Anvil acct 1
       luis: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", // Anvil acct 2
     },
+    // Local: the mock token stands in for COPm (both 18 decimals).
+    prize: { token: "0x5FbDB2315678afecb367f032d93F642f64180aa3", decimals: 18 },
   },
   celoSepolia: {
     chain: celoSepolia,
@@ -82,6 +89,9 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       ana: "0xf84658EE8704269e863e9CF28dD38D4007dd2080",
       luis: "0xe092eF39dcd29016F07f5D3fA283f9456Ba9a7C2",
     },
+    // Testnet stand-in: pay the prize in USDC (faucetable, 6 decimals). Mainnet
+    // would use COPm (18 decimals) — override via PRIZE_TOKEN_ADDRESS/_DECIMALS.
+    prize: { token: "0x01C5C0122039549AD1493B8220cABEdD739BC44E", decimals: 6 },
   },
   celo: {
     chain: celo,
@@ -102,6 +112,9 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
     feeCurrency: "0x2F25deB3848C207fc8E0c34035B3Ba7fC157602B",
     // No `friends` on mainnet — keyholders are real users signing from their own
     // wallets; the testnet dev approve-as route is gated off (isTestEnv).
+    // Mainnet prize is the REAL COPm (Mento Colombian Peso, 18 decimals) — distinct
+    // from the USDC vault token above. Overridable via PRIZE_TOKEN_ADDRESS/_DECIMALS.
+    prize: { token: "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", decimals: 18 },
   },
 };
 
@@ -134,8 +147,22 @@ export const CONTRACTS = CHAIN_CONFIG[CHAIN_KEY].contracts;
 export const FRIEND_ADDRESSES = CHAIN_CONFIG[CHAIN_KEY].friends;
 
 // The vault token's decimals (Anvil mock = 18, Celo Sepolia USDC = 6). The
-// human-USD <-> base-unit conversion in lib/vaults uses this.
+// human-USD <-> base-unit conversion uses this.
 export const TOKEN_DECIMALS = CHAIN_CONFIG[CHAIN_KEY].decimals;
+
+// Canonical wei -> human USD for the vault token. One seam so the conversion
+// (and any future rounding) is identical everywhere (lib/vaults, raffle reads).
+export function toUsd(wei: bigint): number {
+  return Number(formatUnits(wei, TOKEN_DECIMALS));
+}
+
+// The raffle prize token (P3). Per-chain default, overridable via env so a future
+// mainnet deploy can point at COPm without a code change.
+export const PRIZE_TOKEN = (process.env.PRIZE_TOKEN_ADDRESS ??
+  CHAIN_CONFIG[CHAIN_KEY].prize.token) as Address;
+export const PRIZE_TOKEN_DECIMALS = Number(
+  process.env.PRIZE_TOKEN_DECIMALS ?? CHAIN_CONFIG[CHAIN_KEY].prize.decimals,
+);
 
 // A read-only client. Safe everywhere (no wallet, no signing).
 export function getPublicClient() {
@@ -272,3 +299,36 @@ const _feeCurrency = CHAIN_CONFIG[CHAIN_KEY].feeCurrency;
 export const FEE_OPTS: { feeCurrency?: Address } = _feeCurrency
   ? { feeCurrency: _feeCurrency }
   : {};
+
+// --- PRIZE WALLET (P3 payout) ----------------------------------------------
+// The hot wallet that holds and sends the raffle prize. Its key is SERVER-ONLY
+// (PRIZE_WALLET_PK) and used only inside the authenticated payout route — never
+// the browser. On Anvil it defaults to a well-known test account (#3) so local
+// payout works with no config; on a live chain PRIZE_WALLET_PK MUST be set.
+const ANVIL_PRIZE_KEY =
+  "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6" as const; // Anvil acct 3
+
+function prizeWalletKey(): `0x${string}` {
+  const pk = (process.env.PRIZE_WALLET_PK || (isLocalChain ? ANVIL_PRIZE_KEY : "")) as `0x${string}`;
+  if (!pk) throw new Error("PRIZE_WALLET_PK not set (required to pay the prize on a live chain)");
+  return pk;
+}
+
+/**
+ * The prize wallet ADDRESS — for read-only checks (e.g. is the prize funded?)
+ * without constructing a signer. Prefers the public PRIZE_WALLET_ADDRESS env so a
+ * read path needs no spending key at all; falls back to deriving it from the key.
+ */
+export function getPrizeWalletAddress(): Address {
+  if (process.env.PRIZE_WALLET_ADDRESS) return process.env.PRIZE_WALLET_ADDRESS as Address;
+  return privateKeyToAccount(prizeWalletKey()).address;
+}
+
+/** The prize wallet SIGNER — only the payout route should call this (it spends). */
+export function getPrizeWalletClient() {
+  return createWalletClient({
+    account: privateKeyToAccount(prizeWalletKey()),
+    chain: activeChain,
+    transport: http(ACTIVE_RPC),
+  });
+}

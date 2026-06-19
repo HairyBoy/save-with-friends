@@ -247,8 +247,10 @@ export function useDraft(draftId: string) {
   return { draft, isLoading: draft === undefined, reload };
 }
 
-/** Today's prize + this user's odds, for the Prize screen. */
+/** Today's prize + this user's odds, for the Prize screen. Refetches when the
+ *  wallet connects (the address feeds "your entries"). */
 export function useDailyPrize() {
+  const { address } = useWallet();
   const [prize, setPrize] = useState<DailyPrize | null>(null);
 
   useEffect(() => {
@@ -259,7 +261,7 @@ export function useDailyPrize() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [address]);
 
   return { prize, isLoading: prize === null };
 }
