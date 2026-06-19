@@ -49,6 +49,11 @@ export function BalanceNotice({
           {t.create.addMoney}
         </a>
       )}
+
+      {/* Single-token UX: vaults are held in USDC only for now, and the dollar
+          abstraction hides that — so state it plainly at every deposit/contribute
+          point (MiniPay graceful-degradation requirement for single-stablecoin apps). */}
+      <p className="text-[11px] text-neutral-400">{t.create.usdcOnly}</p>
     </div>
   );
 }
