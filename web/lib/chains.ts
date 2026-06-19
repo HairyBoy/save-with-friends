@@ -28,7 +28,18 @@ export const anvil = defineChain({
   rpcUrls: { default: { http: ["http://localhost:8545"] } },
 });
 
-type ChainKey = "anvil" | "celoSepolia" | "celo";
+// A local Anvil node FORKING Celo mainnet (`anvil --fork-url forno.celo.org
+// --chain-id 31337`). It carries real Aave + USDC, so it's the only local way to
+// exercise the earning vaults. Same id as anvil (31337) on purpose, so isLocalChain
+// stays true and the dev wallet / time-travel keep working. Port-overridable.
+export const celoFork = defineChain({
+  id: 31337,
+  name: "Celo fork (local)",
+  nativeCurrency: { name: "Celo", symbol: "CELO", decimals: 18 },
+  rpcUrls: { default: { http: [process.env.NEXT_PUBLIC_FORK_RPC ?? "http://127.0.0.1:8545"] } },
+});
+
+type ChainKey = "anvil" | "celoSepolia" | "celo" | "celoFork";
 
 type ChainEntry = {
   chain: Chain;
@@ -121,10 +132,17 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       // never be silent, so an unset env fails the write fast instead.
       savingsVaults: (process.env.NEXT_PUBLIC_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
       sharedVaults: (process.env.NEXT_PUBLIC_SHARED_VAULTS_ADDRESS ?? "0x") as Address,
+      // v3 yield contracts — set via env once they're deployed to mainnet. "0x" (no
+      // baked default) until then; yieldAvailable stays false so the toggle is grayed.
+      yieldSavingsVaults: (process.env.NEXT_PUBLIC_YIELD_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
+      yieldSharedVaults: (process.env.NEXT_PUBLIC_YIELD_SHARED_VAULTS_ADDRESS ?? "0x") as Address,
       // Canonical Circle USDC on Celo mainnet (6-dec). Verified against Celo docs /
       // celopedia network-info. Launch is USDC-only (Mento auto-swap deferred).
       token: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
     },
+    // Aave V3 IS on Celo mainnet, but flip this true only after the v3 yield
+    // contracts are actually deployed here and the addresses above are set.
+    yieldAvailable: false,
     decimals: 6, // USDC
     // USDC's CIP-64 fee-currency ADAPTER on mainnet (6→18) — NOT the token address
     // (passing the token would revert). Lets gas be paid in USDC so a MiniPay user
@@ -136,6 +154,35 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
     // from the USDC vault token above. Overridable via PRIZE_TOKEN_ADDRESS/_DECIMALS.
     prize: { token: "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", decimals: 18 },
   },
+  // Local Celo-mainnet fork: real Aave + USDC, fake gas. The only local chain where
+  // earning vaults work. Contract addresses default to the deterministic fresh-fork
+  // deploy (contracts/script/dev-fork.sh) and are env-overridable. Dev wallet + the
+  // Anvil keyholder accounts work because the id is 31337 (isLocalChain).
+  celoFork: {
+    chain: celoFork,
+    contracts: {
+      savingsVaults: (process.env.NEXT_PUBLIC_FORK_SAVINGS ??
+        "0xe1Fd27F4390DcBE165f4D60DBF821e4B9Bb02dEd") as Address,
+      sharedVaults: (process.env.NEXT_PUBLIC_FORK_SHARED ??
+        "0xc582Bc0317dbb0908203541971a358c44b1F3766") as Address,
+      yieldSavingsVaults: (process.env.NEXT_PUBLIC_FORK_YIELD_SAVINGS ??
+        "0xB2b580ce436E6F77A5713D80887e14788Ef49c9A") as Address,
+      yieldSharedVaults: (process.env.NEXT_PUBLIC_FORK_YIELD_SHARED ??
+        "0xB377a2EeD7566Ac9fCb0BA673604F9BF875e2Bab") as Address,
+      // Real Celo-mainnet USDC (forked in).
+      token: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    },
+    yieldAvailable: true,
+    decimals: 6, // USDC
+    friends: {
+      // Anvil's well-known accounts #1 and #2 (present on the fork), reused as the
+      // stub keyholders so the friend-approves-unlock flow can be driven locally.
+      ana: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      luis: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    },
+    // Real mainnet COPm (forked in), to mirror mainnet's prize semantics locally.
+    prize: { token: "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", decimals: 18 },
+  },
 };
 
 const CHAIN_KEY: ChainKey =
@@ -143,10 +190,13 @@ const CHAIN_KEY: ChainKey =
     ? "celo"
     : process.env.NEXT_PUBLIC_CHAIN === "celoSepolia"
       ? "celoSepolia"
-      : "anvil";
+      : process.env.NEXT_PUBLIC_CHAIN === "celoFork"
+        ? "celoFork"
+        : "anvil";
 
-// Both Celo chains (testnet + mainnet) route browser reads through the same-origin
-// /api/rpc proxy and use a dedicated server-only RPC; only the env var differs.
+// The hosted Celo chains (testnet + mainnet) route browser reads through the
+// same-origin /api/rpc proxy + a server-only RPC. The local fork (celoFork) reads
+// its local node directly, so it is NOT hosted.
 const isHostedCelo = CHAIN_KEY === "celoSepolia" || CHAIN_KEY === "celo";
 
 export const activeChain = CHAIN_CONFIG[CHAIN_KEY].chain;
