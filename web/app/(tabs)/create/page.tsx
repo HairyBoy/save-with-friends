@@ -116,6 +116,7 @@ export default function CreateVaultScreen() {
           goal: goalNum,
           deadlineDays: daysUntil(deadline),
           payoutMode: splitMode === "equal" ? "owner-takes-all" : "by-contribution",
+          earn,
         });
         resetVaultDraft();
         router.push(`/draft/${draftId}`);
@@ -211,10 +212,9 @@ export default function CreateVaultScreen() {
           </div>
         </div>
 
-        {/* Earn yield (solo only for now). Grayed where Aave isn't deployed (testnets),
-            so the option is visibly wired before mainnet. */}
-        {!shared && (
-          <div className="flex flex-col gap-2">
+        {/* Earn yield — for solo AND shared (both have a yield contract variant). Grayed
+            where Aave isn't deployed (testnets), so the option is visibly wired pre-mainnet. */}
+        <div className="flex flex-col gap-2">
             <p className={labelClass}>{t.create.earnLabel}</p>
             <div className="flex gap-2">
               <button
@@ -246,8 +246,7 @@ export default function CreateVaultScreen() {
             <p className="text-xs text-neutral-400">
               {YIELD_AVAILABLE ? t.create.earnHint : t.create.earnUnavailable}
             </p>
-          </div>
-        )}
+        </div>
 
         {/* Icon */}
         <div className="flex flex-col gap-2">

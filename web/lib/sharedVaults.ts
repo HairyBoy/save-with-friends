@@ -5,7 +5,7 @@
 // draft they were launched from.
 
 import { formatUnits, parseUnits, zeroAddress, type Address } from "viem";
-import { activeChain, getActiveAccount, TOKEN_DECIMALS } from "@/lib/chains";
+import { activeChain, getActiveAccount, TOKEN_DECIMALS, YIELD_AVAILABLE } from "@/lib/chains";
 import { readChainNow } from "@/lib/onchainVaults";
 import {
   approveSharedEarlyExit,
@@ -14,13 +14,32 @@ import {
   PAYOUT_OWNER_TAKES_ALL,
   readContribution,
   readMemberVaultIds,
+  readSharedMemberValue,
   readSharedMembers,
+  readSharedPotValue,
   readSharedUnlocked,
   readSharedVault,
   withdrawShared,
   type OnchainSharedVault,
+  type SharedVariant,
 } from "@/lib/onchainSharedVaults";
 import { resolveNames } from "@/lib/friends";
+
+// Re-export so screens can gate the create-flow earn toggle through this seam.
+export { YIELD_AVAILABLE } from "@/lib/chains";
+
+// Plain and yield shared vaults are separate contracts whose ids both start at 1, so
+// the UI-facing id namespaces the yield ones with a "y" prefix (plain stays a bare
+// number). Every per-id action recovers the variant from the prefix.
+function parseSharedId(id: string): { variant: SharedVariant; num: bigint } {
+  return id.startsWith("y")
+    ? { variant: "yield", num: BigInt(id.slice(1)) }
+    : { variant: "plain", num: BigInt(id) };
+}
+
+function sharedIdStr(num: bigint, variant: SharedVariant): string {
+  return variant === "yield" ? `y${num.toString()}` : num.toString();
+}
 
 export type PayoutMode = "by-contribution" | "owner-takes-all";
 
@@ -32,15 +51,17 @@ export type SharedMember = {
 };
 
 export type SharedVault = {
-  id: string; // raw on-chain id
+  id: string; // UI id: bare number (plain) or "y"-prefixed (yield)
   name: string;
   icon: string;
   goal: number;
-  saved: number;
+  saved: number; // principal pooled (yield shown separately)
   currency: "USD";
   deadlineUnix: number;
   ownerAddress: Address;
   payoutMode: PayoutMode;
+  earning: boolean; // Aave-yield vault?
+  yieldEarned: number; // accrued pot yield (detail only; 0 in the list / non-earning)
   memberCount: number;
   approvals: number;
   members?: SharedMember[]; // populated by getSharedVault (detail); omitted in the list
@@ -55,6 +76,7 @@ export type Draft = {
   goal: string; // human USD
   deadlineDays: number;
   payoutMode: PayoutMode;
+  earn: boolean; // launch as an Aave-yield shared vault?
   launchedVaultId: string | null;
   members: { address: string; name: string | null }[];
 };
@@ -85,9 +107,14 @@ async function fetchSharedMeta(ids: string[]): Promise<Map<string, { name: strin
   return map;
 }
 
-function mapLight(id: bigint, v: OnchainSharedVault, meta?: { name: string; icon: string }): SharedVault {
+function mapLight(
+  num: bigint,
+  variant: SharedVariant,
+  v: OnchainSharedVault,
+  meta?: { name: string; icon: string },
+): SharedVault {
   return {
-    id: id.toString(),
+    id: sharedIdStr(num, variant),
     name: meta?.name ?? "Shared vault",
     icon: meta?.icon ?? "🏖️",
     goal: toUsd(v.goal),
@@ -96,6 +123,8 @@ function mapLight(id: bigint, v: OnchainSharedVault, meta?: { name: string; icon
     deadlineUnix: Number(v.deadline),
     ownerAddress: v.owner,
     payoutMode: payoutModeOf(v),
+    earning: variant === "yield",
+    yieldEarned: 0, // pot yield is read in getSharedVault (detail); 0 here
     memberCount: v.memberCount,
     approvals: v.approvals,
   };
@@ -103,33 +132,51 @@ function mapLight(id: bigint, v: OnchainSharedVault, meta?: { name: string; icon
 
 // --- reads ------------------------------------------------------------------
 
-/** Every (non-closed) shared vault the current user is a member of. Light (no
- *  per-member detail) — for the home list. */
+// Every (non-closed) shared vault of one variant the user is a member of.
+async function getSharedVaultsOfVariant(variant: SharedVariant): Promise<SharedVault[]> {
+  const me = currentUser();
+  const ids = await readMemberVaultIds(me, variant);
+  if (ids.length === 0) return [];
+  const meta = await fetchSharedMeta(ids.map((i) => sharedIdStr(i, variant)));
+  const out = await Promise.all(
+    ids.map(async (id) => {
+      const v = await readSharedVault(id, variant);
+      return v.closed ? null : mapLight(id, variant, v, meta.get(sharedIdStr(id, variant)));
+    }),
+  );
+  return out.filter((x): x is SharedVault => x !== null);
+}
+
+/** Every (non-closed) shared vault the current user is a member of, across the plain
+ *  and (where Aave exists) yield contracts. Light (no per-member detail) — home list. */
 export async function getSharedVaults(): Promise<SharedVault[]> {
   const me = currentUser();
   if (me === zeroAddress) return [];
-  const ids = await readMemberVaultIds(me);
-  if (ids.length === 0) return [];
-  const meta = await fetchSharedMeta(ids.map((i) => i.toString()));
-  const out = await Promise.all(
-    ids.map(async (id) => {
-      const v = await readSharedVault(id);
-      return v.closed ? null : mapLight(id, v, meta.get(id.toString()));
-    }),
-  );
-  return out.filter((x): x is SharedVault => x !== null).reverse();
+  const groups = await Promise.all([
+    getSharedVaultsOfVariant("plain"),
+    YIELD_AVAILABLE ? getSharedVaultsOfVariant("yield") : Promise.resolve([] as SharedVault[]),
+  ]);
+  return groups.flat().reverse();
 }
 
-/** One shared vault with full member + contribution detail — for the detail screen. */
+/** One shared vault with full member + contribution detail — for the detail screen.
+ *  For earning vaults, contributions/pot reflect current value (principal + yield). */
 export async function getSharedVault(id: string): Promise<SharedVault | null> {
-  const idB = BigInt(id);
-  const v = await readSharedVault(idB);
+  const { variant, num } = parseSharedId(id);
+  const v = await readSharedVault(num, variant);
   if (v.owner === zeroAddress) return null;
-  const memberAddrs = await readSharedMembers(idB);
-  const [names, contribs, meta] = await Promise.all([
+  const earning = variant === "yield";
+  const memberAddrs = await readSharedMembers(num, variant);
+  const [names, contribs, meta, potValueWei] = await Promise.all([
     resolveNames(memberAddrs),
-    Promise.all(memberAddrs.map((a) => readContribution(idB, a))),
+    // Earning: each member's redeemable value (principal + their yield). Plain: their contribution.
+    Promise.all(
+      memberAddrs.map((a) =>
+        earning ? readSharedMemberValue(num, a) : readContribution(num, a, variant),
+      ),
+    ),
     fetchSharedMeta([id]),
+    earning ? readSharedPotValue(num) : Promise.resolve(v.saved),
   ]);
   const ownerLc = v.owner.toLowerCase();
   const members: SharedMember[] = memberAddrs.map((a, i) => ({
@@ -138,11 +185,14 @@ export async function getSharedVault(id: string): Promise<SharedVault | null> {
     contributed: toUsd(contribs[i]),
     isOwner: a.toLowerCase() === ownerLc,
   }));
-  return { ...mapLight(idB, v, meta.get(id)), members };
+  const base = mapLight(num, variant, v, meta.get(id));
+  const potValue = toUsd(potValueWei);
+  return { ...base, members, yieldEarned: earning ? Math.max(0, potValue - base.saved) : 0 };
 }
 
 export async function getSharedUnlocked(id: string): Promise<boolean> {
-  return readSharedUnlocked(BigInt(id));
+  const { variant, num } = parseSharedId(id);
+  return readSharedUnlocked(num, variant);
 }
 
 /** The full pooled total across the shared vaults the user is in (everyone's money).
@@ -161,10 +211,18 @@ export async function getSharedReceiving(): Promise<number> {
   const vaults = await getSharedVaults();
   let total = 0;
   for (const v of vaults) {
+    const { variant, num } = parseSharedId(v.id);
     if (v.payoutMode === "owner-takes-all") {
-      if (v.ownerAddress.toLowerCase() === meLc) total += v.saved;
+      // The owner receives the whole pot — its current value (principal + yield) if earning.
+      if (v.ownerAddress.toLowerCase() === meLc) {
+        total += variant === "yield" ? toUsd(await readSharedPotValue(num)) : v.saved;
+      }
     } else {
-      total += toUsd(await readContribution(BigInt(v.id), me));
+      // Each member receives their own stake — current value if earning.
+      total +=
+        variant === "yield"
+          ? toUsd(await readSharedMemberValue(num, me))
+          : toUsd(await readContribution(num, me, variant));
     }
   }
   return total;
@@ -183,13 +241,16 @@ export function sharedPayout(v: SharedVault, memberAddress: string): number {
 // --- on-chain actions -------------------------------------------------------
 
 export async function contributeToShared(id: string, amountUsd: number): Promise<void> {
-  await depositShared(BigInt(id), parseUnits(String(amountUsd), TOKEN_DECIMALS));
+  const { variant, num } = parseSharedId(id);
+  await depositShared(num, parseUnits(String(amountUsd), TOKEN_DECIMALS), variant);
 }
 export async function approveSharedUnlock(id: string): Promise<void> {
-  await approveSharedEarlyExit(BigInt(id));
+  const { variant, num } = parseSharedId(id);
+  await approveSharedEarlyExit(num, variant);
 }
 export async function withdrawFromShared(id: string): Promise<void> {
-  await withdrawShared(BigInt(id));
+  const { variant, num } = parseSharedId(id);
+  await withdrawShared(num, variant);
 }
 
 // --- drafts (off-chain assembly) --------------------------------------------
@@ -200,6 +261,7 @@ export type NewDraftInput = {
   goal: number;
   deadlineDays: number;
   payoutMode: PayoutMode;
+  earn?: boolean; // launch as an Aave-yield shared vault (only where YIELD_AVAILABLE)
 };
 
 export async function createDraft(input: NewDraftInput): Promise<string> {
@@ -213,6 +275,7 @@ export async function createDraft(input: NewDraftInput): Promise<string> {
       goal: String(input.goal),
       deadlineDays: input.deadlineDays,
       payout: input.payoutMode === "owner-takes-all" ? 1 : 0,
+      earn: Boolean(input.earn && YIELD_AVAILABLE),
     }),
   });
   if (!res.ok) throw new Error("draft-create-failed");
@@ -223,8 +286,12 @@ export async function createDraft(input: NewDraftInput): Promise<string> {
 export async function getDraft(draftId: string): Promise<Draft | null> {
   const res = await fetch(`/api/drafts/${draftId}`);
   if (!res.ok) return null;
-  const d = (await res.json()) as Omit<Draft, "payoutMode"> & { payout: number };
-  return { ...d, payoutMode: d.payout === 1 ? "owner-takes-all" : "by-contribution" };
+  const d = (await res.json()) as Omit<Draft, "payoutMode" | "earn"> & { payout: number; earn?: boolean };
+  return {
+    ...d,
+    payoutMode: d.payout === 1 ? "owner-takes-all" : "by-contribution",
+    earn: Boolean(d.earn),
+  };
 }
 
 export async function joinDraft(draftId: string, memberName: string): Promise<void> {
@@ -252,25 +319,28 @@ export async function removeDraftMember(draftId: string, member: string): Promis
 export async function launchDraft(draftId: string, initialDepositUsd: number): Promise<string> {
   const d = await getDraft(draftId);
   if (!d) throw new Error("draft-not-found");
+  const variant: SharedVariant = d.earn && YIELD_AVAILABLE ? "yield" : "plain";
   const ownerLc = d.owner.toLowerCase();
   const members = d.members
     .map((m) => m.address)
     .filter((a) => a.toLowerCase() !== ownerLc) as Address[];
   const chainNow = await readChainNow();
   const deadline = chainNow + BigInt(Math.max(1, d.deadlineDays) * 86400);
-  const id = await createSharedVault({
+  const num = await createSharedVault({
     goal: parseUnits(d.goal, TOKEN_DECIMALS),
     deadline,
     payout: d.payoutMode === "owner-takes-all" ? 1 : 0,
     members,
     deposit: parseUnits(String(initialDepositUsd), TOKEN_DECIMALS),
+    variant,
   });
+  const vaultId = sharedIdStr(num, variant);
   await fetch(`/api/drafts/${draftId}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action: "launch", owner: currentUser(), vaultId: id.toString() }),
+    body: JSON.stringify({ action: "launch", owner: currentUser(), vaultId }),
   });
-  return id.toString();
+  return vaultId;
 }
 
 export const SHARED_CHAIN_ID = CHAIN_ID;
