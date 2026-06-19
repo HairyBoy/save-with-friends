@@ -152,11 +152,18 @@ async function getSharedVaultsOfVariant(variant: SharedVariant): Promise<SharedV
 export async function getSharedVaults(): Promise<SharedVault[]> {
   const me = currentUser();
   if (me === zeroAddress) return [];
-  const groups = await Promise.all([
-    getSharedVaultsOfVariant("plain"),
-    YIELD_AVAILABLE ? getSharedVaultsOfVariant("yield") : Promise.resolve([] as SharedVault[]),
-  ]);
-  return groups.flat().reverse();
+  try {
+    const groups = await Promise.all([
+      getSharedVaultsOfVariant("plain"),
+      YIELD_AVAILABLE ? getSharedVaultsOfVariant("yield") : Promise.resolve([] as SharedVault[]),
+    ]);
+    return groups.flat().reverse();
+  } catch {
+    // Best-effort: a chain/contract read failure (e.g. a vault contract not deployed
+    // on this chain, or a transient RPC error) must NOT crash the home page — show no
+    // shared vaults rather than throwing the whole screen.
+    return [];
+  }
 }
 
 /** One shared vault with full member + contribution detail — for the detail screen.

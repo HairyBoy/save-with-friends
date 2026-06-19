@@ -43,6 +43,8 @@ const en = {
     members: "members",
     details: "details",
     create: "Create a Vault",
+    canUnlockTitle: "Friends counting on you",
+    tapToUnlock: "tap to unlock",
   },
 
   create: {
@@ -201,7 +203,7 @@ const en = {
       "Your money earns yield in Aave while it's locked. Withdrawals are instant in normal conditions. Very rarely, if Aave's pool is fully lent out, a withdrawal may need to wait a little until funds free up — your money is always safe, you'd just try again shortly.",
     earnLiquidityClose: "Got it",
     deposit: "Deposit",
-    requestUnlock: "Request Unlock",
+    requestUnlock: "Ask a friend to unlock",
     withdraw: "Withdraw",
     depositTitle: "Add to this vault",
     add: "Add",
@@ -210,7 +212,7 @@ const en = {
     depositError: "Couldn't add funds. Please try again.",
     withdrawError: "Couldn't withdraw. Please try again.",
     unlockAsk:
-      "Vault link copied — share it with a keyholder. Any one of them can approve the unlock from their own wallet.",
+      "Your keyholders already see this vault in their app — ask any one of them to approve the unlock from their own wallet.",
     noKeyholders: "No friends hold a key to this vault.",
     approveUnlock: "Approve unlock",
     approveUnlockDone: "Unlocked — thanks for approving.",
@@ -302,6 +304,8 @@ const es: typeof en = {
     members: "miembros",
     details: "detalles",
     create: "Crear una Alcancía",
+    canUnlockTitle: "Amigos que cuentan contigo",
+    tapToUnlock: "toca para abrir",
   },
 
   create: {
@@ -458,7 +462,7 @@ const es: typeof en = {
       "Tu plata genera rendimiento en Aave mientras está guardada. Los retiros son instantáneos en condiciones normales. Muy rara vez, si el fondo de Aave está totalmente prestado, un retiro puede tener que esperar un poco hasta que se libere plata — tu dinero siempre está seguro, solo lo intentas de nuevo en un rato.",
     earnLiquidityClose: "Entendido",
     deposit: "Depositar",
-    requestUnlock: "Solicitar apertura",
+    requestUnlock: "Pídele a un amigo que la abra",
     withdraw: "Retirar",
     depositTitle: "Agregar a esta alcancía",
     add: "Agregar",
@@ -467,7 +471,7 @@ const es: typeof en = {
     depositError: "No se pudieron agregar fondos. Inténtalo de nuevo.",
     withdrawError: "No se pudo retirar. Inténtalo de nuevo.",
     unlockAsk:
-      "Enlace de la alcancía copiado — compártelo con un llavero. Cualquiera puede aprobar la apertura desde su propia billetera.",
+      "Tus llaveros ya ven esta alcancía en su app — pídele a cualquiera que apruebe la apertura desde su propia billetera.",
     noKeyholders: "Ningún amigo tiene una llave de esta alcancía.",
     approveUnlock: "Aprobar apertura",
     approveUnlockDone: "Abierta — gracias por aprobar.",
