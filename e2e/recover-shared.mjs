@@ -27,7 +27,7 @@ async function send(who, fn, args) {
     console.log(`  ${who} ${fn}(${args}) ok`);
   } catch (e) { console.log(`  ${who} ${fn}(${args}) skipped: ${String(e.message).split("\n")[0]}`); }
 }
-for (const id of [1n, 2n]) {
+for (const id of [1n, 2n, 7n]) {
   const v = await pub.readContract({ address: SHARED, abi, functionName: "getVault", args: [id] });
   if (v.closed) { console.log(`vault #${id}: already closed`); continue; }
   console.log(`vault #${id}: saved=${v.saved} reclaiming…`);
