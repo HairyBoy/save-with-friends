@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   title: "Save with Friends · Ahorra con Amigos",
   description:
     "Social savings on Celo — lock funds in a Vault toward a goal, save with friends.",
+  // Site-ownership proof for the Celo Proof of Ship project page (talent.app).
+  // Renders into <head> as <meta name="talentapp:project_verification" content="…">.
+  other: {
+    "talentapp:project_verification":
+      "1d6c837387a591524e226f96a66b477f042274dc76ac39d430fa96d9f5b8a9c7cfd2088a09d1293c7568a510e464682e7d15515900e8a1f1066fa3abab8a0216",
+  },
 };
 
 // Mobile-first: MiniPay renders at ~360×640. Lock the viewport to device width.
