@@ -13,6 +13,7 @@ import {
   getDevTestClient,
   getPublicClient,
   getWalletClient,
+  PRIZE_TOKEN,
 } from "@/lib/chains";
 import { savingsVaultsAbi } from "@/lib/savingsVaultsAbi";
 
@@ -67,6 +68,16 @@ export async function readUnlocked(id: bigint): Promise<boolean> {
 export async function readTokenBalance(owner: Address): Promise<bigint> {
   return getPublicClient().readContract({
     address: CONTRACTS.token,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [owner],
+  });
+}
+
+/** An owner's balance of the PRIZE token (COPm on mainnet) — for showing winnings. */
+export async function readPrizeTokenBalance(owner: Address): Promise<bigint> {
+  return getPublicClient().readContract({
+    address: PRIZE_TOKEN,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [owner],

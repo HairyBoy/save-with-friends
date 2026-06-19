@@ -57,6 +57,26 @@ MiniPay site tester.
 
 ---
 
+## Deploying the daily raffle
+
+The daily COPm raffle runs on **Vercel Cron** (see [`web/vercel.json`](web/vercel.json):
+the draw fires at `17:00 UTC` = noon Bogotá, the payout 5 minutes later). For it to run
+in production, set these env vars (full list in [`web/.env.example`](web/.env.example)):
+
+| Var | Purpose |
+|---|---|
+| `DATABASE_URL` | Neon Postgres — stores draws + winners. Usually already set by the Vercel↔Neon integration. |
+| `CRON_SECRET` | Shared secret Vercel Cron sends as a bearer token; the draw/payout routes reject anything else. Generate with `openssl rand -hex 32`. |
+| `PRIZE_WALLET_PK` | Private key of the hot wallet that pays the prize. **Fund this wallet** with the prize token (+ a little fee-currency for gas). |
+| `PRIZE_TOKEN_ADDRESS` / `PRIZE_TOKEN_DECIMALS` | **Mainnet only** — point the prize at COPm (`0x8A567e2aE79CA692Bd748aB832081C45de4041eA`, 18 decimals). Defaults: Anvil mock / Sepolia USDC stand-in. |
+
+Fail-safe by design: without `CRON_SECRET`, or on any day the prize wallet can't cover
+the pot, the raffle simply doesn't draw or pay (no errors). The `raffle_draws` /
+`raffle_entries` tables auto-create on first use. Set the daily prize amount via
+`RAFFLE_BASE_PRIZE_COPM` in [`web/lib/raffle.ts`](web/lib/raffle.ts).
+
+---
+
 ## License
 
 MIT

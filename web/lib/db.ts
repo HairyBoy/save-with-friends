@@ -87,6 +87,35 @@ export function ensureSchema(): Promise<void> {
         created_at     timestamptz not null default now(),
         primary key (draft_id, member_address)
       )`;
+      // Raffle draws + their entry snapshots. Entries are DERIVED from on-chain
+      // Deposited events at draw time (the chain is the source of truth); we
+      // snapshot them here for a fast UI and an audit trail. `status`:
+      //   'drawn'  — winner picked, COPm not yet sent
+      //   'paid'   — COPm transferred (payout_tx_hash set)
+      //   'skipped'— nobody qualified; prize_copm rolls into a later draw
+      // P1 only READS these (winners history + rollover); the draw job (P2) writes.
+      await sql`create table if not exists raffle_draws (
+        id             bigserial primary key,
+        chain_id       integer not null,
+        window_start   timestamptz not null,
+        draw_at        timestamptz not null,
+        prize_copm     numeric not null,
+        status         text not null,
+        winner_address text,
+        total_weight   numeric,
+        random_seed    text,
+        payout_tx_hash text,
+        created_at     timestamptz not null default now()
+      )`;
+      await sql`create unique index if not exists raffle_draws_chain_draw_idx
+        on raffle_draws (chain_id, draw_at)`;
+      await sql`create table if not exists raffle_entries (
+        draw_id       bigint not null references raffle_draws(id) on delete cascade,
+        address       text not null,
+        weight_usd    numeric not null,
+        deposit_count integer not null,
+        primary key (draw_id, address)
+      )`;
     })().catch((e) => {
       _schemaReady = null; // let a later request retry the bootstrap
       throw e;

@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/raffle/draw",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/raffle/payout",
+      "schedule": "5 17 * * *"
+    }
+  ]
+}

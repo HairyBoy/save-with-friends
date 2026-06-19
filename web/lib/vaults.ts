@@ -12,12 +12,14 @@
 // a backend later. UI-facing types stay plain numbers (human USD); the on-chain
 // wei<->USD conversion is hidden in this file.
 
-import { formatUnits, parseUnits, zeroAddress, type Address } from "viem";
+import { parseUnits, zeroAddress, type Address } from "viem";
 import {
   activeChain,
   getActiveAccount,
   isLocalChain,
   isTestEnv,
+  toCop,
+  toUsd,
   TOKEN_DECIMALS,
 } from "@/lib/chains";
 import {
@@ -31,6 +33,7 @@ import {
   readChainNow,
   readKeyholders,
   readOwnerVaultIds,
+  readPrizeTokenBalance,
   readTokenBalance,
   readUnlocked,
   readVault,
@@ -55,6 +58,7 @@ export {
   getInvite,
   acceptFriendInvite,
 } from "@/lib/friends";
+import { RAFFLE_BASE_PRIZE_COPM, type RaffleWinner } from "@/lib/raffle";
 
 // The active chain id scopes synced vault metadata (names/emojis) per chain.
 const CHAIN_ID = activeChain.id;
@@ -88,11 +92,18 @@ export type SavingsSummary = {
   currency: VaultCurrency;
 };
 
+export type { RaffleWinner };
+
 export type DailyPrize = {
-  amountCopm: number; // prize pool, paid in COPm
-  winChancePct: number; // this user's chance of winning today
-  yourEntries: number; // your raffle entries (1 per $1 locked today)
-  totalEntries: number; // everyone's entries today
+  amountCopm: number; // prize pool, paid in COPm (base + any rollover)
+  funded: boolean; // is the prize wallet funded? if not, there's no draw this day
+  winChancePct: number; // this user's chance of winning today (= your share of total deposits)
+  yourDepositsUsd: number; // how much YOU deposited today (USD) — your weight in the draw
+  totalDepositsUsd: number; // everyone's deposits today (USD) — the denominator
+  disqualified: boolean; // you withdrew this window, so you're out of today's draw
+  youWonCopm: number | null; // set if YOU won the most recent draw (for the 🎉 banner)
+  yourCopmBalance: number; // your COPm balance (prize token) — winnings sit here
+  winners: RaffleWinner[]; // recent past winners (newest first; [] until the draw job runs)
 };
 
 // The connected user's address: the local dev account on Anvil, or the connected
@@ -140,10 +151,6 @@ async function writeVaultMeta(id: string, name: string, icon: string, createdAt:
 
 function unixToIsoDate(unix: bigint): string {
   return new Date(Number(unix) * 1000).toISOString().slice(0, 10);
-}
-
-function toUsd(wei: bigint): number {
-  return Number(formatUnits(wei, TOKEN_DECIMALS));
 }
 
 // Map an on-chain solo vault (+ its synced metadata) into the UI shape. The meta is
@@ -226,17 +233,22 @@ export async function getBalances(): Promise<{
   sharedReceiving: number;
   wallet: number;
   total: number;
+  copm: number; // COP raffle winnings (prize token) — a separate currency, NOT in total
 }> {
-  const [personal, sharedReceiving, wallet] = await Promise.all([
+  const [personal, sharedReceiving, wallet, copm] = await Promise.all([
     getSoloVaultedBalance(),
     getSharedReceiving(),
     getWalletBalance(),
+    readPrizeTokenBalance(currentUser())
+      .then(toCop)
+      .catch(() => 0),
   ]);
   return {
     personal,
     sharedReceiving,
     wallet,
-    total: personal + sharedReceiving + wallet,
+    total: personal + sharedReceiving + wallet, // USD only — COP winnings are separate
+    copm,
   };
 }
 
@@ -256,16 +268,49 @@ export async function getSavingsSummary(): Promise<SavingsSummary> {
   return { currentlySaving, savedAllTime, currency: "USD" };
 }
 
-// Today's weighted-raffle prize (COPm). 1 entry per $1 locked today; stubbed.
+// Today's weighted-raffle prize (COPm). Entries are derived from on-chain deposits
+// in /api/raffle; 1 entry per $1 locked this window. Best-effort: on any failure
+// we return a sane empty state (base prize, no entries) so the screen still renders.
 export async function getDailyPrize(): Promise<DailyPrize> {
-  const yourEntries = 320;
-  const totalEntries = 1780;
-  return {
-    amountCopm: 4000,
-    winChancePct: Math.round((yourEntries / totalEntries) * 100),
-    yourEntries,
-    totalEntries,
-  };
+  const empty = (): DailyPrize => ({
+    amountCopm: RAFFLE_BASE_PRIZE_COPM,
+    funded: false,
+    winChancePct: 0,
+    yourDepositsUsd: 0,
+    totalDepositsUsd: 0,
+    disqualified: false,
+    youWonCopm: null,
+    yourCopmBalance: 0,
+    winners: [],
+  });
+  try {
+    const res = await fetch(`/api/raffle?address=${currentUser()}`);
+    if (!res.ok) return empty();
+    const d = (await res.json()) as {
+      prizeCopm: number;
+      funded: boolean;
+      yourDepositsUsd: number;
+      totalDepositsUsd: number;
+      winChancePct: number;
+      disqualified: boolean;
+      youWonCopm: number | null;
+      yourCopmBalance: number;
+      winners: RaffleWinner[];
+    };
+    return {
+      amountCopm: d.prizeCopm,
+      funded: d.funded ?? false,
+      winChancePct: d.winChancePct,
+      yourDepositsUsd: d.yourDepositsUsd,
+      totalDepositsUsd: d.totalDepositsUsd,
+      disqualified: d.disqualified ?? false,
+      youWonCopm: d.youWonCopm ?? null,
+      yourCopmBalance: d.yourCopmBalance ?? 0,
+      winners: d.winners ?? [],
+    };
+  } catch {
+    return empty();
+  }
 }
 
 export type NewVaultInput = {
