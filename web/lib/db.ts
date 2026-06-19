@@ -67,6 +67,26 @@ export function ensureSchema(): Promise<void> {
       )`;
       // Friendships are now pure edges; names come from users (no typed nicknames).
       await sql`alter table friends alter column nickname drop not null`;
+      // Shared-vault DRAFTS: a group is assembled off-chain (owner + members who joined
+      // via the draft link) before the owner launches it on-chain with a fixed roster.
+      // `launched_vault_id` is the on-chain id once created (null = still a draft).
+      await sql`create table if not exists vault_drafts (
+        id                 text primary key,
+        owner_address      text not null,
+        name               text not null,
+        icon               text not null,
+        goal               text not null,
+        deadline_days      integer not null,
+        payout             integer not null,
+        launched_vault_id  text,
+        created_at         timestamptz not null default now()
+      )`;
+      await sql`create table if not exists draft_members (
+        draft_id       text not null,
+        member_address text not null,
+        created_at     timestamptz not null default now(),
+        primary key (draft_id, member_address)
+      )`;
     })().catch((e) => {
       _schemaReady = null; // let a later request retry the bootstrap
       throw e;
