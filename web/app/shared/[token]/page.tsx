@@ -8,6 +8,7 @@ import { useWallet } from "@/components/WalletProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useSharedVault, useWalletBalance } from "@/hooks/useVaults";
 import { approveSharedUnlock, contributeToShared, sharedPayout, withdrawFromShared } from "@/lib/sharedVaults";
+import { BalanceNotice } from "@/components/BalanceNotice";
 
 // Shared (group) vault detail (full-screen). Members contribute their own funds;
 // unlock on goal / deadline / strict-majority approval; withdraw by payout mode
@@ -167,11 +168,11 @@ export default function SharedVaultScreen() {
                   />
                   <span className="text-xs font-semibold text-neutral-400">{t.create.goalCurrency}</span>
                 </div>
-                {balance !== null && (
-                  <p className={`text-xs ${overBalance ? "text-red-500" : "text-neutral-400"}`}>
-                    {overBalance ? t.shared.overBalance : `${t.shared.youvePutIn} $${fmt(myContribution)} · ${t.shared.available} $${fmt(balance)}`}
-                  </p>
-                )}
+                <BalanceNotice
+                  over={overBalance}
+                  available={balance}
+                  hint={`${t.shared.youvePutIn} $${fmt(myContribution)}`}
+                />
                 <button
                   type="button"
                   onClick={() => run(() => contributeToShared(token, amountNum).then(() => setAmount("")), "reload", t.shared.contributeError)}

@@ -18,4 +18,9 @@ Cash top-up flow instead of dead-ending on an error (readiness checklist §6).
 requirement satisfied as new deposit/contribute flows are added. The deeplink itself
 lives in `lib/minipay.ts` (`MINIPAY_DEEPLINKS`) — never inline a `link.minipay.xyz` URL.
 
-Current call sites: `app/(tabs)/create/page.tsx`, `app/vault/[id]/page.tsx`.
+It also carries the always-on "held in USDC" single-token explainer
+(`t.create.usdcOnly`) — MiniPay's graceful-degradation requirement for single-
+stablecoin apps — so every deposit/contribute point states it without per-screen copy.
+
+Current call sites: `app/(tabs)/create/page.tsx`, `app/vault/[id]/page.tsx`,
+`app/shared/[token]/page.tsx`, `app/draft/[token]/page.tsx`.

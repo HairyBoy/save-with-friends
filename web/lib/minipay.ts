@@ -8,10 +8,12 @@
 //
 // Canonical deeplink list: https://docs.minipay.xyz/technical-references/deeplinks.html
 
-// The stablecoins this app uses inside MiniPay (its first-class trio). Scoping
-// the Add Cash deeplink to these pre-selects the right top-up options. CELO is
-// intentionally never here — MiniPay hides it and pays network fees for the user.
-const ADD_CASH_TOKENS = "USDm,USDC,USDT";
+// The stablecoin this app uses inside MiniPay. Vaults are held in USDC only for
+// now (the Mento auto-swap is deferred), so the Add Cash deeplink is scoped to
+// USDC — a low-balance user tops up the exact token they need, not a mix they'd
+// then have to swap. CELO is intentionally never here — MiniPay hides it and pays
+// network fees for the user. Widen this when multi-stablecoin support lands.
+const ADD_CASH_TOKENS = "USDC";
 
 export const MINIPAY_DEEPLINKS = {
   /** Top-up screen. Use whenever a user's balance is too low to continue. */

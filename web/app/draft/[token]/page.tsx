@@ -7,6 +7,7 @@ import { useLanguage } from "@/components/LanguageProvider";
 import { useWallet } from "@/components/WalletProvider";
 import { useDraft, useMyName, useWalletBalance } from "@/hooks/useVaults";
 import { joinDraft, launchDraft, removeDraftMember } from "@/lib/sharedVaults";
+import { BalanceNotice } from "@/components/BalanceNotice";
 
 // Shared-vault DRAFT screen (full-screen, no tab bar). Role-aware:
 //  • Owner → assemble the roster (invite link, remove), set a starting deposit, and
@@ -174,9 +175,9 @@ export default function DraftScreen() {
               />
               <span className="text-xs font-semibold text-neutral-400">{t.create.goalCurrency}</span>
             </div>
-            {balance !== null && (
-              <p className="mt-1 text-xs text-neutral-400">{t.shared.available}: ${balance.toLocaleString()}</p>
-            )}
+            <div className="mt-1">
+              <BalanceNotice over={balance !== null && Number(deposit) > balance} available={balance} />
+            </div>
           </div>
           <button type="button" onClick={create} disabled={busy} className={primaryBtn}>
             {busy ? t.shared.creating : t.shared.createVault}
