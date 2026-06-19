@@ -16,6 +16,7 @@ import {
   PRIZE_TOKEN,
 } from "@/lib/chains";
 import { savingsVaultsAbi } from "@/lib/savingsVaultsAbi";
+import { yieldSavingsVaultsAbi } from "@/lib/yieldSavingsVaultsAbi";
 
 // The vault struct as the contract returns it (getVault).
 export type OnchainVault = {
@@ -23,22 +24,36 @@ export type OnchainVault = {
   deadline: bigint; // uint64 unix seconds
   closed: boolean;
   goal: bigint; // wei
-  saved: bigint; // wei
+  saved: bigint; // wei (principal; yield is held separately as scaled aToken shares)
+  scaledSaved?: bigint; // yield variant only — Aave scaled shares (principal + yield)
   approvals: number; // uint32
   threshold: number; // uint32
 };
 
-const vaultsContract = {
-  address: CONTRACTS.savingsVaults,
-  abi: savingsVaultsAbi,
-} as const;
+// Which solo contract a vault lives in: the plain escrow or the Aave-yield variant.
+// Both expose identical create/deposit/withdraw/approve/getVault signatures, so the
+// only thing that changes per call is the (address, abi) pair below.
+export type SoloVariant = "plain" | "yield";
+
+// The plain and yield ABIs share identical create/deposit/withdraw/approve/getVault/
+// unlocked/getKeyholders signatures, so we type the chosen ABI against the plain one
+// for viem's inference. The RUNTIME value is still the variant's real ABI (so the
+// yield getVault decodes its extra scaledSaved field); reads are cast to OnchainVault.
+// The yield-only `withdrawable` view is read separately with its concrete ABI below.
+function contractFor(variant: SoloVariant) {
+  const address = variant === "yield" ? CONTRACTS.yieldSavingsVaults : CONTRACTS.savingsVaults;
+  const abi = (
+    variant === "yield" ? yieldSavingsVaultsAbi : savingsVaultsAbi
+  ) as unknown as typeof savingsVaultsAbi;
+  return { address, abi } as const;
+}
 
 // --- reads -----------------------------------------------------------------
 
 /** The ids of every vault this owner has created (oldest first). */
-export async function readOwnerVaultIds(owner: Address): Promise<bigint[]> {
+export async function readOwnerVaultIds(owner: Address, variant: SoloVariant = "plain"): Promise<bigint[]> {
   const ids = await getPublicClient().readContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "getOwnerVaults",
     args: [owner],
   });
@@ -46,19 +61,29 @@ export async function readOwnerVaultIds(owner: Address): Promise<bigint[]> {
 }
 
 /** Full struct for one vault. */
-export async function readVault(id: bigint): Promise<OnchainVault> {
+export async function readVault(id: bigint, variant: SoloVariant = "plain"): Promise<OnchainVault> {
   const v = await getPublicClient().readContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "getVault",
     args: [id],
   });
   return v as OnchainVault;
 }
 
-/** The live unlock check (goal reached OR deadline passed OR enough approvals). */
-export async function readUnlocked(id: bigint): Promise<boolean> {
+/** Current redeemable value (principal + accrued Aave yield), yield variant only. */
+export async function readWithdrawable(id: bigint): Promise<bigint> {
   return getPublicClient().readContract({
-    ...vaultsContract,
+    address: CONTRACTS.yieldSavingsVaults,
+    abi: yieldSavingsVaultsAbi,
+    functionName: "withdrawable",
+    args: [id],
+  });
+}
+
+/** The live unlock check (goal reached OR deadline passed OR enough approvals). */
+export async function readUnlocked(id: bigint, variant: SoloVariant = "plain"): Promise<boolean> {
+  return getPublicClient().readContract({
+    ...contractFor(variant),
     functionName: "unlocked",
     args: [id],
   });
@@ -94,9 +119,9 @@ export async function readChainNow(): Promise<bigint> {
 }
 
 /** Keyholder addresses for a vault (display only). */
-export async function readKeyholders(id: bigint): Promise<Address[]> {
+export async function readKeyholders(id: bigint, variant: SoloVariant = "plain"): Promise<Address[]> {
   const ks = await getPublicClient().readContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "getKeyholders",
     args: [id],
   });
@@ -119,14 +144,15 @@ async function send(hash: Hash) {
   return receipt;
 }
 
-/** ERC20 approve so the vault can pull `amount` of the token from the owner. */
-export async function approveToken(amount: bigint): Promise<void> {
+/** ERC20 approve so the vault can pull `amount` of the token from the owner. The
+ *  spender is the specific solo contract (plain or yield) the deposit targets. */
+export async function approveToken(amount: bigint, variant: SoloVariant = "plain"): Promise<void> {
   const wallet = getWalletClient();
   const hash = await wallet.writeContract({
     address: CONTRACTS.token,
     abi: erc20Abi,
     functionName: "approve",
-    args: [CONTRACTS.savingsVaults, amount],
+    args: [contractFor(variant).address, amount],
     ...FEE_OPTS,
   });
   await send(hash);
@@ -144,15 +170,17 @@ export async function createSoloVault(args: {
   deadline: bigint;
   deposit: bigint;
   keyholders: Address[];
+  variant?: SoloVariant;
 }): Promise<bigint> {
+  const variant = args.variant ?? "plain";
   const wallet = getWalletClient();
   const publicClient = getPublicClient();
 
   // Approve the initial deposit so createVault can pull it in the same tx.
-  if (args.deposit > 0n) await approveToken(args.deposit);
+  if (args.deposit > 0n) await approveToken(args.deposit, variant);
 
   const createHash = await wallet.writeContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "createVault",
     args: [args.goal, args.deadline, args.keyholders, args.deposit],
     ...FEE_OPTS,
@@ -160,8 +188,9 @@ export async function createSoloVault(args: {
   const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
   if (receipt.status === "reverted") throw new Error("createVault reverted on-chain");
 
+  // VaultCreated has the same shape in both ABIs; parse with whichever we used.
   const [created] = parseEventLogs({
-    abi: savingsVaultsAbi,
+    abi: contractFor(variant).abi,
     eventName: "VaultCreated",
     logs: receipt.logs,
   });
@@ -170,10 +199,10 @@ export async function createSoloVault(args: {
 }
 
 /** Add funds to a vault (owner-only). Caller must have approved first. */
-export async function deposit(id: bigint, amount: bigint): Promise<void> {
+export async function deposit(id: bigint, amount: bigint, variant: SoloVariant = "plain"): Promise<void> {
   const wallet = getWalletClient();
   const hash = await wallet.writeContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "deposit",
     args: [id, amount],
     ...FEE_OPTS,
@@ -182,10 +211,10 @@ export async function deposit(id: bigint, amount: bigint): Promise<void> {
 }
 
 /** Withdraw the full balance once unlocked (closes the vault). */
-export async function withdraw(id: bigint): Promise<void> {
+export async function withdraw(id: bigint, variant: SoloVariant = "plain"): Promise<void> {
   const wallet = getWalletClient();
   const hash = await wallet.writeContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "withdraw",
     args: [id],
     ...FEE_OPTS,
@@ -210,10 +239,14 @@ export async function advanceChainTime(seconds: number): Promise<void> {
  * approval unlocks. In dev, `keyholder` is an Anvil test account; in production
  * it's the friend's real wallet signing from their own device.
  */
-export async function approveEarlyExitAs(id: bigint, keyholder: Address): Promise<void> {
+export async function approveEarlyExitAs(
+  id: bigint,
+  keyholder: Address,
+  variant: SoloVariant = "plain",
+): Promise<void> {
   const wallet = getDevKeyholderWalletClient(keyholder);
   const hash = await wallet.writeContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "approveEarlyExit",
     args: [id],
   });
@@ -227,10 +260,10 @@ export async function approveEarlyExitAs(id: bigint, keyholder: Address): Promis
  * Solo threshold is 1, so a single approval unlocks. On Celo, gas is paid in the
  * stablecoin via FEE_OPTS, so the friend needs no CELO.
  */
-export async function approveEarlyExit(id: bigint): Promise<void> {
+export async function approveEarlyExit(id: bigint, variant: SoloVariant = "plain"): Promise<void> {
   const wallet = getWalletClient();
   const hash = await wallet.writeContract({
-    ...vaultsContract,
+    ...contractFor(variant),
     functionName: "approveEarlyExit",
     args: [id],
     ...FEE_OPTS,

@@ -7,7 +7,7 @@ import { useLanguage } from "@/components/LanguageProvider";
 import { BalanceNotice } from "@/components/BalanceNotice";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useFriends, useWalletBalance } from "@/hooks/useVaults";
-import { createVault } from "@/lib/vaults";
+import { createVault, YIELD_AVAILABLE } from "@/lib/vaults";
 import { createDraft } from "@/lib/sharedVaults";
 import {
   resetVaultDraft,
@@ -48,7 +48,10 @@ export default function CreateVaultScreen() {
   const { friends: friendOptions, isLoading: friendsLoading } = useFriends();
   const { balance } = useWalletBalance();
   const draft = useVaultDraft();
-  const { shared, splitMode, icon, name, goal, deposit, preset, deadline, friends } = draft;
+  const { shared, earn, splitMode, icon, name, goal, deposit, preset, deadline, friends } = draft;
+  // "Earn Interest" only actually applies where Aave is deployed; elsewhere the choice
+  // falls back to Standard (and the toggle is grayed), so drive the UI off this.
+  const earnActive = earn && YIELD_AVAILABLE;
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +119,7 @@ export default function CreateVaultScreen() {
           goal: goalNum,
           deadlineDays: daysUntil(deadline),
           payoutMode: splitMode === "equal" ? "owner-takes-all" : "by-contribution",
+          earn,
         });
         resetVaultDraft();
         router.push(`/draft/${draftId}`);
@@ -128,6 +132,7 @@ export default function CreateVaultScreen() {
           deposit: depositNum,
           deadline: deadline || null,
           friendIds: friends,
+          earn,
         });
         resetVaultDraft();
         router.push("/");
@@ -208,6 +213,47 @@ export default function CreateVaultScreen() {
               {t.create.typeShared}
             </button>
           </div>
+        </div>
+
+        {/* Savings Mode — for solo AND shared (both have an interest-earning contract
+            variant). "Earn Interest" is the default; it's grayed where Aave isn't
+            deployed (testnets), so it falls back to Standard there. */}
+        <div className="flex flex-col gap-2">
+            <p className={labelClass}>{t.create.earnLabel}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setVaultDraft({ earn: false })}
+                aria-pressed={!earnActive}
+                className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
+                  !earnActive
+                    ? "border-primary bg-primary text-white shadow-sm"
+                    : "border-white/60 bg-white/60 text-neutral-700"
+                }`}
+              >
+                {t.create.earnStandard}
+              </button>
+              <button
+                type="button"
+                disabled={!YIELD_AVAILABLE}
+                onClick={() => setVaultDraft({ earn: true })}
+                aria-pressed={earnActive}
+                className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
+                  earnActive
+                    ? "border-primary bg-primary text-white shadow-sm"
+                    : "border-white/60 bg-white/60 text-neutral-700"
+                } ${!YIELD_AVAILABLE ? "cursor-not-allowed opacity-40" : ""}`}
+              >
+                <span className="inline-flex items-center gap-1">📈 {t.create.earnYield}</span>
+              </button>
+            </div>
+            <p className="text-xs text-neutral-400">
+              {!YIELD_AVAILABLE
+                ? t.create.earnUnavailable
+                : earnActive
+                  ? t.create.earnHintEarn
+                  : t.create.earnHintStandard}
+            </p>
         </div>
 
         {/* Icon */}

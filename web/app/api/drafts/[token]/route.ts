@@ -5,12 +5,21 @@
 import { isAddress } from "viem";
 import { CONTRACTS, getPublicClient } from "@/lib/chains";
 import { sharedVaultsAbi } from "@/lib/sharedVaultsAbi";
+import { yieldSharedVaultsAbi } from "@/lib/yieldSharedVaultsAbi";
 import { ensureSchema, getSql, isDbConfigured } from "@/lib/db";
 
 export const runtime = "nodejs";
 
 const noDb = () => Response.json({ error: "database not configured" }, { status: 503 });
 const lc = (a: string) => a.toLowerCase();
+
+// A launched vault id is namespaced: "y"-prefixed for the Aave-yield contract, a bare
+// number for the plain one. Recover which contract to verify against.
+function parseVaultId(vaultId: string): { yield: boolean; num: bigint } {
+  return vaultId.startsWith("y")
+    ? { yield: true, num: BigInt(vaultId.slice(1)) }
+    : { yield: false, num: BigInt(vaultId) };
+}
 
 type Draft = {
   owner_address: string;
@@ -19,12 +28,13 @@ type Draft = {
   goal: string;
   deadline_days: number;
   payout: number;
+  earn: boolean;
   launched_vault_id: string | null;
 };
 
 async function loadDraft(id: string): Promise<Draft | undefined> {
   const [d] = (await getSql()`
-    select owner_address, name, icon, goal, deadline_days, payout, launched_vault_id
+    select owner_address, name, icon, goal, deadline_days, payout, earn, launched_vault_id
     from vault_drafts where id = ${id}`) as Draft[];
   return d;
 }
@@ -52,6 +62,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     goal: d.goal,
     deadlineDays: d.deadline_days,
     payout: d.payout,
+    earn: d.earn,
     launchedVaultId: d.launched_vault_id,
     members,
   });
@@ -99,13 +110,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (body.action === "launch") {
     if (!body.owner || lc(body.owner) !== d.owner_address) return Response.json({ error: "owner only" }, { status: 403 });
     if (body.vaultId == null) return Response.json({ error: "vaultId required" }, { status: 400 });
-    // Verify on-chain that the launched vault is really owned by this owner.
+    // Verify on-chain that the launched vault is really owned by this owner. The id is
+    // namespaced, so read against the matching contract (plain vs Aave-yield).
     try {
+      const { yield: isYield, num } = parseVaultId(String(body.vaultId));
       const v = await getPublicClient().readContract({
-        address: CONTRACTS.sharedVaults,
-        abi: sharedVaultsAbi,
+        address: isYield ? CONTRACTS.yieldSharedVaults : CONTRACTS.sharedVaults,
+        abi: isYield ? (yieldSharedVaultsAbi as unknown as typeof sharedVaultsAbi) : sharedVaultsAbi,
         functionName: "getVault",
-        args: [BigInt(body.vaultId)],
+        args: [num],
       });
       if (v.owner.toLowerCase() !== d.owner_address) {
         return Response.json({ error: "not the vault owner" }, { status: 403 });

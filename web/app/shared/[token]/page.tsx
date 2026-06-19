@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useWallet } from "@/components/WalletProvider";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
+import { LiquidityNote } from "@/components/LiquidityNote";
 import { useSharedVault, useWalletBalance } from "@/hooks/useVaults";
 import { approveSharedUnlock, contributeToShared, sharedPayout, withdrawFromShared } from "@/lib/sharedVaults";
 import { BalanceNotice } from "@/components/BalanceNotice";
@@ -92,6 +93,15 @@ export default function SharedVaultScreen() {
           </div>
           <p className="mt-2 text-xs font-medium text-neutral-500">{payoutLabel}</p>
         </section>
+
+        {/* Accrued Aave yield (earning vaults only). */}
+        {vault.earning && (
+          <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
+            <p className="text-sm font-semibold text-primary-dark">📈 {t.vaultDetail.yieldEarned}</p>
+            <p className="mt-1 text-sm text-neutral-600">${fmt(vault.yieldEarned)}</p>
+            <LiquidityNote />
+          </section>
+        )}
 
         {/* Members */}
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">

@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useWallet } from "@/components/WalletProvider";
 import { BalanceNotice } from "@/components/BalanceNotice";
+import { LiquidityNote } from "@/components/LiquidityNote";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useVault, useWalletBalance } from "@/hooks/useVaults";
 import {
@@ -216,10 +217,13 @@ export default function VaultDetailScreen() {
           </ul>
         </section>
 
-        <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
-          <p className="text-sm font-semibold text-primary-dark">{t.vaultDetail.yieldEarned}</p>
-          <p className="mt-1 text-sm text-neutral-600">${fmt(vault?.yieldEarned ?? 0)}</p>
-        </section>
+        {vault?.earning && (
+          <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
+            <p className="text-sm font-semibold text-primary-dark">{t.vaultDetail.yieldEarned}</p>
+            <p className="mt-1 text-sm text-neutral-600">${fmt(vault?.yieldEarned ?? 0)}</p>
+            <LiquidityNote />
+          </section>
+        )}
 
         <div className="mt-auto flex flex-col gap-2.5">
           {/* DEV-ONLY: fast-forward the chain so a timer vault crosses its deadline. */}

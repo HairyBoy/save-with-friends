@@ -21,6 +21,7 @@ import {
   toCop,
   toUsd,
   TOKEN_DECIMALS,
+  YIELD_AVAILABLE,
 } from "@/lib/chains";
 import {
   advanceChainTime,
@@ -37,7 +38,9 @@ import {
   readTokenBalance,
   readUnlocked,
   readVault,
+  readWithdrawable,
   type OnchainVault,
+  type SoloVariant,
 } from "@/lib/onchainVaults";
 import { getFriends as loadFriends, resolveNames } from "@/lib/friends";
 import {
@@ -67,6 +70,22 @@ const CHAIN_ID = activeChain.id;
 export const IS_DEV_CHAIN = isLocalChain;
 // Whether testnet-friendly dev affordances ("approve as keyholder") are available.
 export const IS_TEST_ENV = isTestEnv;
+// Whether Aave-backed "earning" vaults work on this chain (drives the create toggle).
+export { YIELD_AVAILABLE } from "@/lib/chains";
+
+// Solo vaults can live in the plain escrow OR the Aave-yield contract, two separate
+// contracts whose ids both start at 1. We namespace the yield ones with a "y" prefix
+// in the UI-facing string id (plain stays a bare number, backward-compatible) so they
+// never collide and every per-id action can recover which contract to call.
+function parseSoloId(id: string): { variant: SoloVariant; num: bigint } {
+  return id.startsWith("y")
+    ? { variant: "yield", num: BigInt(id.slice(1)) }
+    : { variant: "plain", num: BigInt(id) };
+}
+
+function soloIdStr(num: bigint, variant: SoloVariant): string {
+  return variant === "yield" ? `y${num.toString()}` : num.toString();
+}
 
 export type VaultCurrency = "USD";
 
@@ -81,7 +100,8 @@ export type Vault = {
   currency: VaultCurrency;
   deadline: string | null; // ISO yyyy-mm-dd unlock date (the timer); null = no timer
   deadlineUnix?: number; // exact unlock timestamp (unix seconds)
-  yieldEarned: number; // earned by the agent while locked
+  earning: boolean; // true = Aave-yield vault (principal supplied to Aave while locked)
+  yieldEarned: number; // accrued Aave yield so far (0 for non-earning vaults)
   createdAt: string; // ISO yyyy-mm-dd
   ownerAddress?: Address; // the on-chain owner — tells an owner viewer apart from a keyholder
 };
@@ -154,35 +174,63 @@ function unixToIsoDate(unix: bigint): string {
 }
 
 // Map an on-chain solo vault (+ its synced metadata) into the UI shape. The meta is
-// fetched in batch by the caller and passed in, so this stays synchronous.
-function mapSoloVault(id: bigint, v: OnchainVault, meta?: VaultMeta): Vault {
-  const idStr = id.toString();
+// fetched in batch by the caller and passed in, so this stays synchronous. For yield
+// vaults, `saved` is principal and `yieldEarned` is the accrued extra (withdrawable −
+// principal), so the goal/progress reads off principal while yield shows separately.
+function mapSoloVault(
+  num: bigint,
+  v: OnchainVault,
+  variant: SoloVariant,
+  meta?: VaultMeta,
+  withdrawableWei?: bigint,
+): Vault {
+  const idStr = soloIdStr(num, variant);
+  const saved = toUsd(v.saved);
+  const earned =
+    variant === "yield" && withdrawableWei !== undefined
+      ? Math.max(0, toUsd(withdrawableWei) - saved)
+      : 0;
   return {
     id: idStr,
     name: meta?.name ?? "Vault",
     icon: meta?.icon ?? "🔒",
     goal: toUsd(v.goal),
-    saved: toUsd(v.saved),
+    saved,
     currency: "USD",
     deadline: unixToIsoDate(v.deadline),
     deadlineUnix: Number(v.deadline),
-    yieldEarned: 0, // no yield in v1
+    earning: variant === "yield",
+    yieldEarned: earned,
     createdAt: meta?.createdAt ?? unixToIsoDate(v.deadline),
     ownerAddress: v.owner,
   };
 }
 
-// Read every (non-closed) solo vault the current user owns, newest first.
-async function getOnchainSoloVaults(): Promise<Vault[]> {
-  const ids = await readOwnerVaultIds(currentUser());
-  const metaMap = await fetchVaultMeta(ids.map((id) => id.toString()));
+// Read every (non-closed) solo vault of one variant the current user owns.
+async function getSoloVaultsOfVariant(variant: SoloVariant): Promise<Vault[]> {
+  const owner = currentUser();
+  const ids = await readOwnerVaultIds(owner, variant);
+  if (ids.length === 0) return [];
+  const metaMap = await fetchVaultMeta(ids.map((id) => soloIdStr(id, variant)));
   const vaults = await Promise.all(
     ids.map(async (id) => {
-      const v = await readVault(id);
-      return v.closed ? null : mapSoloVault(id, v, metaMap.get(id.toString()));
+      const v = await readVault(id, variant);
+      if (v.closed) return null;
+      const withdrawableWei = variant === "yield" ? await readWithdrawable(id) : undefined;
+      return mapSoloVault(id, v, variant, metaMap.get(soloIdStr(id, variant)), withdrawableWei);
     }),
   );
-  return vaults.filter((v): v is Vault => v !== null).reverse();
+  return vaults.filter((v): v is Vault => v !== null);
+}
+
+// Read every (non-closed) solo vault the current user owns across BOTH the plain and
+// (where Aave exists) the yield contract, newest first.
+async function getOnchainSoloVaults(): Promise<Vault[]> {
+  const groups = await Promise.all([
+    getSoloVaultsOfVariant("plain"),
+    YIELD_AVAILABLE ? getSoloVaultsOfVariant("yield") : Promise.resolve([] as Vault[]),
+  ]);
+  return groups.flat().reverse();
 }
 
 // --- public API ------------------------------------------------------------
@@ -194,10 +242,12 @@ export async function getVaults(): Promise<Vault[]> {
 }
 
 export async function getVault(id: string): Promise<Vault | null> {
-  const v = await readVault(BigInt(id));
+  const { variant, num } = parseSoloId(id);
+  const v = await readVault(num, variant);
   if (v.owner === "0x0000000000000000000000000000000000000000") return null; // no such vault
   const metaMap = await fetchVaultMeta([id]);
-  return mapSoloVault(BigInt(id), v, metaMap.get(id));
+  const withdrawableWei = variant === "yield" ? await readWithdrawable(num) : undefined;
+  return mapSoloVault(num, v, variant, metaMap.get(id), withdrawableWei);
 }
 
 /** Spendable money in the user's wallet (USD) — what deposits draw from. */
@@ -320,6 +370,7 @@ export type NewVaultInput = {
   deposit: number; // the creator's starting amount
   deadline: string | null;
   friendIds: string[]; // keyholders who can approve an early unlock
+  earn?: boolean; // true = create an Aave-yield vault (only where YIELD_AVAILABLE)
 };
 
 // Smallest gap (seconds) we leave between the on-chain deadline and the chain's
@@ -362,36 +413,44 @@ export async function createVault(input: NewVaultInput): Promise<Vault> {
   }
   const friends = await loadFriends();
 
+  // Earning vaults only exist where Aave does; guard so a stray flag on a testnet
+  // can't route to an undeployed ("0x") contract.
+  const variant: SoloVariant = input.earn && YIELD_AVAILABLE ? "yield" : "plain";
+
   const keyholders = input.friendIds
     .map((fid) => friends.find((f) => f.id === fid)?.address)
     .filter((a): a is Address => Boolean(a));
-  const id = await createSoloVaultOnchain({
+  const num = await createSoloVaultOnchain({
     goal: parseUnits(String(input.goal), TOKEN_DECIMALS),
     deadline: await deadlineToUnix(input.deadline),
     deposit: parseUnits(String(input.deposit), TOKEN_DECIMALS),
     keyholders,
+    variant,
   });
 
-  const idStr = id.toString();
+  const idStr = soloIdStr(num, variant);
   const createdAt = new Date().toISOString().slice(0, 10);
   await writeVaultMeta(idStr, input.name, input.icon, createdAt);
 
-  const v = await readVault(id);
-  return mapSoloVault(id, v, { name: input.name, icon: input.icon, createdAt });
+  const v = await readVault(num, variant);
+  const withdrawableWei = variant === "yield" ? await readWithdrawable(num) : undefined;
+  return mapSoloVault(num, v, variant, { name: input.name, icon: input.icon, createdAt }, withdrawableWei);
 }
 
 // --- solo vault actions (on-chain) — for the detail screen's buttons --------
 
 /** Add funds to a solo vault (approve then deposit). `amount` is human USD. */
 export async function depositToVault(id: string, amount: number): Promise<void> {
+  const { variant, num } = parseSoloId(id);
   const wei = parseUnits(String(amount), TOKEN_DECIMALS);
-  await approveToken(wei);
-  await depositOnchain(BigInt(id), wei);
+  await approveToken(wei, variant);
+  await depositOnchain(num, wei, variant);
 }
 
 /** Withdraw a solo vault once it's unlocked (closes it). */
 export async function withdrawVault(id: string): Promise<void> {
-  await withdrawOnchain(BigInt(id));
+  const { variant, num } = parseSoloId(id);
+  await withdrawOnchain(num, variant);
 }
 
 export type VaultKeyholder = { address: string; name: string | null };
@@ -400,7 +459,8 @@ export type VaultKeyholder = { address: string; name: string | null };
  *  the keyholder hasn't set a name — the UI shows a generic "a friend", never a 0x). */
 export async function getVaultKeyholders(id: string): Promise<VaultKeyholder[]> {
   if (id.startsWith("shared-")) return []; // shared keys are a v2 concern
-  const addrs = await readKeyholders(BigInt(id));
+  const { variant, num } = parseSoloId(id);
+  const addrs = await readKeyholders(num, variant);
   const names = await resolveNames(addrs);
   return addrs.map((a) => ({ address: a, name: names[a.toLowerCase()] ?? null }));
 }
@@ -409,7 +469,8 @@ export async function getVaultKeyholders(id: string): Promise<VaultKeyholder[]> 
  *  production path. The viewer must be a keyholder of this vault (the contract
  *  enforces it; the owner can't self-approve). One approval unlocks a solo vault. */
 export async function approveUnlock(id: string): Promise<void> {
-  await approveEarlyExitOnchain(BigInt(id));
+  const { variant, num } = parseSoloId(id);
+  await approveEarlyExitOnchain(num, variant);
 }
 
 /** DEV/TEST: approve an early unlock AS a given keyholder, to drive the
@@ -418,7 +479,8 @@ export async function approveUnlock(id: string): Promise<void> {
  *  /api/dev/approve-as route (key never reaches the client). One approval unlocks. */
 export async function devApproveAsKeyholder(id: string, keyholder: string): Promise<void> {
   if (isLocalChain) {
-    await approveEarlyExitAs(BigInt(id), keyholder as Address);
+    const { variant, num } = parseSoloId(id);
+    await approveEarlyExitAs(num, keyholder as Address, variant);
     return;
   }
   const res = await fetch("/api/dev/approve-as", {
@@ -435,7 +497,8 @@ export async function devApproveAsKeyholder(id: string, keyholder: string): Prom
 /** Live unlock check for a solo vault (goal/deadline/approvals). */
 export async function isVaultUnlocked(id: string): Promise<boolean> {
   if (id.startsWith("shared-")) return false; // shared unlock is a v2 concern
-  return readUnlocked(BigInt(id));
+  const { variant, num } = parseSoloId(id);
+  return readUnlocked(num, variant);
 }
 
 /** DEV-ONLY: jump the local chain forward N days (to watch timer vaults unlock). */

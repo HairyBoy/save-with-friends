@@ -116,6 +116,9 @@ export function ensureSchema(): Promise<void> {
         deposit_count integer not null,
         primary key (draw_id, address)
       )`;
+      // v3: a draft can launch as an Aave-yield shared vault. Idempotent add so
+      // existing deployments migrate in place (defaults to a plain vault).
+      await sql`alter table vault_drafts add column if not exists earn boolean not null default false`;
     })().catch((e) => {
       _schemaReady = null; // let a later request retry the bootstrap
       throw e;

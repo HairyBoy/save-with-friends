@@ -113,6 +113,7 @@ export default function DraftScreen() {
         <h1 className="mt-2 text-xl font-bold">{draft.name}</h1>
         <p className="mt-1 text-sm text-neutral-500">
           {t.shared.goal} ${draft.goal} · {payoutLabel}
+          {draft.earn && <> · 📈 {t.create.earnYield}</>}
         </p>
       </div>
 
