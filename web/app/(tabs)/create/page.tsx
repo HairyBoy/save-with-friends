@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
+import { BalanceNotice } from "@/components/BalanceNotice";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useFriends, useWalletBalance } from "@/hooks/useVaults";
 import { createVault } from "@/lib/vaults";
@@ -253,16 +254,12 @@ export default function CreateVaultScreen() {
             />
             <span className="text-xs font-semibold text-neutral-400">{t.create.goalCurrency}</span>
           </div>
-          <div className="flex items-baseline justify-between gap-2">
-            <p className={`text-xs ${depositInvalid || overBalance ? "text-red-500" : "text-neutral-400"}`}>
-              {overBalance ? t.create.insufficientFunds : t.create.depositHint}
-            </p>
-            {balance !== null && (
-              <p className={`shrink-0 text-xs ${overBalance ? "text-red-500" : "text-neutral-400"}`}>
-                {t.create.available}: ${fmt(balance)}
-              </p>
-            )}
-          </div>
+          <BalanceNotice
+            over={overBalance}
+            available={balance}
+            hint={t.create.depositHint}
+            hintError={depositInvalid}
+          />
         </div>
 
         {/* Unlock timer */}
