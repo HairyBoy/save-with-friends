@@ -1,9 +1,10 @@
 // Chain + contract wiring for the on-chain SavingsVaults.
 //
 // The target chain is chosen at build time via NEXT_PUBLIC_CHAIN: "anvil" (the
-// default — local Foundry dev chain, fake money, zero risk) or "celoSepolia"
-// (the Celo Sepolia testnet deployment). Nothing else in the app needs to know
-// which chain is active; it reads activeChain / ACTIVE_RPC / CONTRACTS from here.
+// default — local Foundry dev chain, fake money, zero risk), "celoSepolia" (the
+// Celo Sepolia testnet deployment), or "celo" (Celo mainnet — real funds).
+// Nothing else in the app needs to know which chain is active; it reads
+// activeChain / ACTIVE_RPC / CONTRACTS from here.
 
 import {
   createPublicClient,
@@ -15,7 +16,7 @@ import {
   type Address,
   type Chain,
 } from "viem";
-import { celoSepolia } from "viem/chains";
+import { celo, celoSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 
 // The local Foundry chain. id 31337 is Anvil's default.
@@ -26,17 +27,19 @@ export const anvil = defineChain({
   rpcUrls: { default: { http: ["http://localhost:8545"] } },
 });
 
-type ChainKey = "anvil" | "celoSepolia";
+type ChainKey = "anvil" | "celoSepolia" | "celo";
 
 type ChainEntry = {
   chain: Chain;
   contracts: { savingsVaults: Address; sharedVaults: Address; token: Address };
   decimals: number; // the vault token's decimals
   feeCurrency?: Address; // CIP-64 fee-currency to pay gas in (so users need no CELO)
-  // The stub friends' addresses (keyholders), per chain. On Anvil these are the
+  // The stub friends' addresses (keyholders), per TEST chain. On Anvil these are the
   // well-known test accounts (public keys, signed client-side); on Celo Sepolia
   // they're dedicated wallets whose keys live server-only (signed via /api/dev).
-  friends: { ana: Address; luis: Address };
+  // OMITTED on mainnet — there real keyholders sign from their own wallets, and the
+  // dev approve-as route is gated off (see isTestEnv).
+  friends?: { ana: Address; luis: Address };
 };
 
 const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
@@ -80,21 +83,50 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       luis: "0xe092eF39dcd29016F07f5D3fA283f9456Ba9a7C2",
     },
   },
+  celo: {
+    chain: celo,
+    contracts: {
+      // Mainnet deploy output — set via env AFTER deploying. "0x" until then, with
+      // NO baked-in default: on a real-funds chain a wrong fallback address must
+      // never be silent, so an unset env fails the write fast instead.
+      savingsVaults: (process.env.NEXT_PUBLIC_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
+      sharedVaults: (process.env.NEXT_PUBLIC_SHARED_VAULTS_ADDRESS ?? "0x") as Address,
+      // Canonical Circle USDC on Celo mainnet (6-dec). Verified against Celo docs /
+      // celopedia network-info. Launch is USDC-only (Mento auto-swap deferred).
+      token: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    },
+    decimals: 6, // USDC
+    // USDC's CIP-64 fee-currency ADAPTER on mainnet (6→18) — NOT the token address
+    // (passing the token would revert). Lets gas be paid in USDC so a MiniPay user
+    // needs no CELO. Verified via FeeCurrencyDirectory / celopedia network-info.
+    feeCurrency: "0x2F25deB3848C207fc8E0c34035B3Ba7fC157602B",
+    // No `friends` on mainnet — keyholders are real users signing from their own
+    // wallets; the testnet dev approve-as route is gated off (isTestEnv).
+  },
 };
 
 const CHAIN_KEY: ChainKey =
-  process.env.NEXT_PUBLIC_CHAIN === "celoSepolia" ? "celoSepolia" : "anvil";
+  process.env.NEXT_PUBLIC_CHAIN === "celo"
+    ? "celo"
+    : process.env.NEXT_PUBLIC_CHAIN === "celoSepolia"
+      ? "celoSepolia"
+      : "anvil";
+
+// Both Celo chains (testnet + mainnet) route browser reads through the same-origin
+// /api/rpc proxy and use a dedicated server-only RPC; only the env var differs.
+const isHostedCelo = CHAIN_KEY === "celoSepolia" || CHAIN_KEY === "celo";
 
 export const activeChain = CHAIN_CONFIG[CHAIN_KEY].chain;
-// In the browser on Celo, reads go through our same-origin /api/rpc proxy, which
-// forwards to a dedicated RPC (Alchemy) using a SERVER-ONLY key — so the key is
-// never bundled client-side. On the server / Node and on Anvil, use the direct
-// RPC (CELO_SEPOLIA_RPC server env, else the chain default).
+// In the browser on a Celo chain, reads go through our same-origin /api/rpc proxy,
+// which forwards to a dedicated RPC (Alchemy) using a SERVER-ONLY key — so the key
+// is never bundled client-side. On the server / Node and on Anvil, use the direct
+// RPC (CELO_MAINNET_RPC / CELO_SEPOLIA_RPC server env, else the chain default).
 const SERVER_RPC =
+  (CHAIN_KEY === "celo" && process.env.CELO_MAINNET_RPC) ||
   (CHAIN_KEY === "celoSepolia" && process.env.CELO_SEPOLIA_RPC) ||
   activeChain.rpcUrls.default.http[0];
 export const ACTIVE_RPC =
-  CHAIN_KEY === "celoSepolia" && typeof window !== "undefined"
+  isHostedCelo && typeof window !== "undefined"
     ? `${window.location.origin}/api/rpc`
     : SERVER_RPC;
 export const CONTRACTS = CHAIN_CONFIG[CHAIN_KEY].contracts;

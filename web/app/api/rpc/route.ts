@@ -1,17 +1,19 @@
-// Server-side JSON-RPC proxy to the dedicated Celo Sepolia RPC (e.g. Alchemy).
+// Server-side JSON-RPC proxy to the dedicated Celo RPC (e.g. Alchemy).
 //
 // The browser POSTs JSON-RPC to this same-origin route, and we forward it upstream
-// using CELO_SEPOLIA_RPC — a SERVER-ONLY env var (no NEXT_PUBLIC_ prefix) — so the
-// private RPC key is never bundled into the client. POST route handlers aren't
-// cached, which is what we want for live RPC.
+// using a SERVER-ONLY env var (no NEXT_PUBLIC_ prefix) — CELO_MAINNET_RPC on
+// mainnet, else CELO_SEPOLIA_RPC — so the private RPC key is never bundled into the
+// client. POST route handlers aren't cached, which is what we want for live RPC.
 //
 // Note: this is an open relay for the configured RPC. Fine for testnet/dev; for
 // production add an origin allowlist and/or rate limiting so it can't be abused.
-const UPSTREAM = process.env.CELO_SEPOLIA_RPC;
+const IS_MAINNET = process.env.NEXT_PUBLIC_CHAIN === "celo";
+const UPSTREAM = IS_MAINNET ? process.env.CELO_MAINNET_RPC : process.env.CELO_SEPOLIA_RPC;
+const UPSTREAM_VAR = IS_MAINNET ? "CELO_MAINNET_RPC" : "CELO_SEPOLIA_RPC";
 
 export async function POST(request: Request) {
   if (!UPSTREAM) {
-    return Response.json({ error: "CELO_SEPOLIA_RPC not configured" }, { status: 500 });
+    return Response.json({ error: `${UPSTREAM_VAR} not configured` }, { status: 500 });
   }
   const body = await request.text();
   const res = await fetch(UPSTREAM, {
