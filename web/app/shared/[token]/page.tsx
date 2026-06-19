@@ -14,7 +14,7 @@ import { approveSharedUnlock, contributeToShared, sharedPayout, withdrawFromShar
 // (each their own, or the owner claims the pot). Separate from the solo /vault/[id]
 // (different contract). No 0x addresses shown — members appear by name.
 export default function SharedVaultScreen() {
-  const { lang } = useLanguage();
+  const { t, lang } = useLanguage();
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
   const { address } = useWallet();
@@ -65,17 +65,17 @@ export default function SharedVaultScreen() {
 
   if (isLoading) return <div className="grid min-h-dvh place-items-center text-neutral-400">…</div>;
   if (!vault) {
-    return <div className="grid min-h-dvh place-items-center px-6 text-center text-sm text-neutral-600">This vault doesn&apos;t exist.</div>;
+    return <div className="grid min-h-dvh place-items-center px-6 text-center text-sm text-neutral-600">{t.shared.vaultNotFound}</div>;
   }
 
-  const payoutLabel = vault.payoutMode === "owner-takes-all" ? "Group gift — goes to the owner" : "Everyone gets their own back";
+  const payoutLabel = vault.payoutMode === "owner-takes-all" ? t.shared.payoutOwnerGift : t.shared.payoutByContribution;
 
   return (
     <div className="flex min-h-dvh flex-col">
       <TopBar
         title={`${vault.icon} ${vault.name}`}
         left={
-          <Link href="/" aria-label="My Vaults" className={topBarActionClass}>
+          <Link href="/" aria-label={t.shared.back} className={topBarActionClass}>
             ←
           </Link>
         }
@@ -95,16 +95,16 @@ export default function SharedVaultScreen() {
         {/* Members */}
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
           <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 text-xs font-medium text-neutral-400">
-            <span>Members</span>
-            <span className="w-20 text-right">Put in</span>
-            <span className="w-20 text-right">Receives</span>
+            <span>{t.shared.members}</span>
+            <span className="w-20 text-right">{t.shared.putIn}</span>
+            <span className="w-20 text-right">{t.shared.receives}</span>
           </div>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {vault.members?.map((m) => (
               <li key={m.address} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 text-sm">
                 <span className="text-neutral-700">
-                  {m.name || "A friend"}
-                  {m.isOwner && <span className="ml-1 text-xs text-neutral-400">· owner</span>}
+                  {m.name || t.shared.aFriend}
+                  {m.isOwner && <span className="ml-1 text-xs text-neutral-400">· {t.shared.ownerTag}</span>}
                 </span>
                 <span className="w-20 text-right text-neutral-500">${fmt(m.contributed)}</span>
                 <span className="w-20 text-right font-medium text-primary-dark">${fmt(sharedPayout(vault, m.address))}</span>
@@ -115,13 +115,13 @@ export default function SharedVaultScreen() {
 
         {/* Unlock conditions */}
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
-          <p className="text-sm font-semibold">Unlock conditions</p>
+          <p className="text-sm font-semibold">{t.shared.unlockConditions}</p>
           <ul className="mt-3 flex flex-col gap-2.5 text-sm text-neutral-700">
-            <li className="flex items-center gap-2.5"><span>🎯</span><span>Goal of ${fmt(vault.goal)} reached</span></li>
+            <li className="flex items-center gap-2.5"><span>🎯</span><span>{t.shared.goalLinePrefix} ${fmt(vault.goal)} {t.shared.goalLineSuffix}</span></li>
             <li className="flex items-center gap-2.5"><span>⏳</span><span className="font-medium">{fmtDate(vault.deadlineUnix)}</span></li>
             <li className="flex items-center gap-2.5">
               <span>🤝</span>
-              <span>{vault.approvals} of {majorityNeeded} approvals needed to unlock early</span>
+              <span>{vault.approvals} {t.shared.approvalsOf} {majorityNeeded} {t.shared.approvalsSuffix}</span>
             </li>
           </ul>
         </section>
@@ -133,28 +133,28 @@ export default function SharedVaultScreen() {
           )}
 
           {!isMember ? (
-            <p className={secondaryBtn}>You&apos;re viewing a group vault.</p>
+            <p className={secondaryBtn}>{t.shared.viewerNote}</p>
           ) : unlocked ? (
             vault.payoutMode === "owner-takes-all" ? (
               isOwner ? (
-                <button type="button" onClick={() => run(() => withdrawFromShared(token), "home", "Couldn't withdraw.")} disabled={busy} className={primaryBtn}>
-                  {busy ? "Working…" : "Claim the pot"}
+                <button type="button" onClick={() => run(() => withdrawFromShared(token), "home", t.shared.withdrawError)} disabled={busy} className={primaryBtn}>
+                  {busy ? t.shared.working : t.shared.claimPot}
                 </button>
               ) : (
-                <p className={secondaryBtn}>Unlocked — this vault pays out to the owner.</p>
+                <p className={secondaryBtn}>{t.shared.ownerGiftNote}</p>
               )
             ) : myContribution > 0 ? (
-              <button type="button" onClick={() => run(() => withdrawFromShared(token), "reload", "Couldn't withdraw.")} disabled={busy} className={primaryBtn}>
-                {busy ? "Working…" : `Withdraw my $${fmt(myContribution)}`}
+              <button type="button" onClick={() => run(() => withdrawFromShared(token), "reload", t.shared.withdrawError)} disabled={busy} className={primaryBtn}>
+                {busy ? t.shared.working : `${t.shared.withdrawMyPrefix} $${fmt(myContribution)}`}
               </button>
             ) : (
-              <p className={secondaryBtn}>Unlocked — you have nothing to withdraw here.</p>
+              <p className={secondaryBtn}>{t.shared.nothingToWithdraw}</p>
             )
           ) : (
             <>
               {/* Contribute */}
               <div className="flex flex-col gap-2 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
-                <p className="text-sm font-semibold">Add your contribution</p>
+                <p className="text-sm font-semibold">{t.shared.addContribution}</p>
                 <div className="flex items-center gap-2 rounded-2xl border border-white/60 bg-white/60 px-4 py-3">
                   <span className="text-neutral-400">$</span>
                   <input
@@ -165,25 +165,25 @@ export default function SharedVaultScreen() {
                     placeholder="0"
                     className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400"
                   />
-                  <span className="text-xs font-semibold text-neutral-400">USD</span>
+                  <span className="text-xs font-semibold text-neutral-400">{t.create.goalCurrency}</span>
                 </div>
                 {balance !== null && (
                   <p className={`text-xs ${overBalance ? "text-red-500" : "text-neutral-400"}`}>
-                    {overBalance ? "More than you have" : `You've put in $${fmt(myContribution)} · Available $${fmt(balance)}`}
+                    {overBalance ? t.shared.overBalance : `${t.shared.youvePutIn} $${fmt(myContribution)} · ${t.shared.available} $${fmt(balance)}`}
                   </p>
                 )}
                 <button
                   type="button"
-                  onClick={() => run(() => contributeToShared(token, amountNum).then(() => setAmount("")), "reload", "Couldn't contribute.")}
+                  onClick={() => run(() => contributeToShared(token, amountNum).then(() => setAmount("")), "reload", t.shared.contributeError)}
                   disabled={!canContribute || busy}
                   className={primaryBtn}
                 >
-                  {busy ? "Working…" : "Contribute"}
+                  {busy ? t.shared.working : t.shared.contribute}
                 </button>
               </div>
               {/* Majority early-unlock */}
-              <button type="button" onClick={() => run(() => approveSharedUnlock(token), "reload", "Couldn't approve.")} disabled={busy} className={secondaryBtn}>
-                {busy ? "Working…" : "Approve early unlock"}
+              <button type="button" onClick={() => run(() => approveSharedUnlock(token), "reload", t.shared.approveError)} disabled={busy} className={secondaryBtn}>
+                {busy ? t.shared.working : t.shared.approveUnlock}
               </button>
             </>
           )}
