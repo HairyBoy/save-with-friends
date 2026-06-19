@@ -131,6 +131,16 @@ export default function PrizeScreen() {
           )}
         </section>
 
+        <section className="rounded-2xl border border-white/60 bg-white/60 p-5 shadow-sm backdrop-blur-md">
+          <div className="flex items-baseline justify-between">
+            <p className="text-sm font-medium text-neutral-600">{t.prize.copmBalanceLabel}</p>
+            <p className="text-2xl font-bold text-primary-dark">
+              {prize ? `${fmt(prize.yourCopmBalance)} COPm` : "—"}
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-neutral-500">{t.prize.copmBalanceNote}</p>
+        </section>
+
         <section className="rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md">
           <p className="text-sm font-semibold">{t.prize.howItWorksTitle}</p>
           <p className="mt-1 text-sm text-neutral-600">{t.prize.howItWorksBody}</p>

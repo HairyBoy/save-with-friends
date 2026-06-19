@@ -21,7 +21,8 @@ import { readChainNow } from "@/lib/onchainVaults";
 import { currentWindow, RAFFLE_BASE_PRIZE_COPM, type RaffleWinner } from "@/lib/raffle";
 import { readWindowEntries } from "@/lib/raffleChain";
 import { getRolloverCopm } from "@/lib/raffleDb";
-import { isPrizeFunded } from "@/lib/prizePayout";
+import { isPrizeFunded, prizeTokenBalanceOf } from "@/lib/prizePayout";
+import type { Address } from "viem";
 
 type DbState = { rolloverCopm: number; winners: RaffleWinner[]; youWonCopm: number | null };
 
@@ -42,9 +43,10 @@ export async function GET(req: Request) {
 
   // Chain entries and DB state are independent — fetch them concurrently. Each
   // degrades to empty on its own failure so the screen never 500s.
-  const [we, db] = await Promise.all([
+  const [we, db, yourCopmBalance] = await Promise.all([
     readWindowEntries(window).catch(() => null),
     loadDbState(chainId, address),
+    address ? prizeTokenBalanceOf(address as Address) : Promise.resolve(0),
   ]);
 
   const entries = we?.entries ?? [];
@@ -69,6 +71,7 @@ export async function GET(req: Request) {
     winChancePct,
     disqualified: isDisqualified,
     youWonCopm: db.youWonCopm,
+    yourCopmBalance,
     winners: db.winners,
   });
 }

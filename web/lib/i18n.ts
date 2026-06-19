@@ -260,6 +260,8 @@ const en = {
     you: "You",
     youWon: "🎉 You won {amount} COPm — it's in your wallet!",
     notFunded: "⏸ No prize funded yet — there's no draw today unless it's funded before the draw.",
+    copmBalanceLabel: "Your COPm",
+    copmBalanceNote: "Your winnings live here, in your wallet.",
   },
 };
 
@@ -503,6 +505,8 @@ const es: typeof en = {
     you: "Tú",
     youWon: "🎉 ¡Ganaste {amount} COPm — ya está en tu billetera!",
     notFunded: "⏸ Aún no hay premio fondeado — no hay sorteo hoy a menos que se fondee antes del sorteo.",
+    copmBalanceLabel: "Tus COPm",
+    copmBalanceNote: "Tus premios quedan aquí, en tu billetera.",
   },
 };
 

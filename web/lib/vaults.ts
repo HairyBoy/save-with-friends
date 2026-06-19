@@ -100,6 +100,7 @@ export type DailyPrize = {
   totalDepositsUsd: number; // everyone's deposits today (USD) — the denominator
   disqualified: boolean; // you withdrew this window, so you're out of today's draw
   youWonCopm: number | null; // set if YOU won the most recent draw (for the 🎉 banner)
+  yourCopmBalance: number; // your COPm balance (prize token) — winnings sit here
   winners: RaffleWinner[]; // recent past winners (newest first; [] until the draw job runs)
 };
 
@@ -272,6 +273,7 @@ export async function getDailyPrize(): Promise<DailyPrize> {
     totalDepositsUsd: 0,
     disqualified: false,
     youWonCopm: null,
+    yourCopmBalance: 0,
     winners: [],
   });
   try {
@@ -285,6 +287,7 @@ export async function getDailyPrize(): Promise<DailyPrize> {
       winChancePct: number;
       disqualified: boolean;
       youWonCopm: number | null;
+      yourCopmBalance: number;
       winners: RaffleWinner[];
     };
     return {
@@ -295,6 +298,7 @@ export async function getDailyPrize(): Promise<DailyPrize> {
       totalDepositsUsd: d.totalDepositsUsd,
       disqualified: d.disqualified ?? false,
       youWonCopm: d.youWonCopm ?? null,
+      yourCopmBalance: d.yourCopmBalance ?? 0,
       winners: d.winners ?? [],
     };
   } catch {
