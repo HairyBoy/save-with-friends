@@ -132,17 +132,24 @@ const CHAIN_CONFIG: Record<ChainKey, ChainEntry> = {
       // never be silent, so an unset env fails the write fast instead.
       savingsVaults: (process.env.NEXT_PUBLIC_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
       sharedVaults: (process.env.NEXT_PUBLIC_SHARED_VAULTS_ADDRESS ?? "0x") as Address,
-      // v3 yield contracts — set via env once they're deployed to mainnet. "0x" (no
-      // baked default) until then; yieldAvailable stays false so the toggle is grayed.
+      // v3 yield contracts — DEPLOYED + verified on Celo mainnet 2026-06-19
+      // (YieldSavingsVaults 0x3C4DC2…0B25, YieldSharedVaults 0x921797…42f4, both
+      // wired to USDC + Aave V3 Pool 0x3E59…3402 + aUSDC 0xFF83…4785). Addresses come
+      // from env so they're not hardcoded; yieldAvailable below derives from them.
       yieldSavingsVaults: (process.env.NEXT_PUBLIC_YIELD_SAVINGS_VAULTS_ADDRESS ?? "0x") as Address,
       yieldSharedVaults: (process.env.NEXT_PUBLIC_YIELD_SHARED_VAULTS_ADDRESS ?? "0x") as Address,
       // Canonical Circle USDC on Celo mainnet (6-dec). Verified against Celo docs /
       // celopedia network-info. Launch is USDC-only (Mento auto-swap deferred).
       token: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
     },
-    // Aave V3 IS on Celo mainnet, but flip this true only after the v3 yield
-    // contracts are actually deployed here and the addresses above are set.
-    yieldAvailable: false,
+    // The yield contracts are deployed; earning is available iff BOTH yield
+    // addresses are configured in env. Deriving it from the env (rather than a
+    // hardcoded true) means the create-flow toggle can never go live pointing at
+    // an unset "0x" address — set the env vars in Vercel and it turns on.
+    yieldAvailable: Boolean(
+      process.env.NEXT_PUBLIC_YIELD_SAVINGS_VAULTS_ADDRESS &&
+        process.env.NEXT_PUBLIC_YIELD_SHARED_VAULTS_ADDRESS,
+    ),
     decimals: 6, // USDC
     // USDC's CIP-64 fee-currency ADAPTER on mainnet (6→18) — NOT the token address
     // (passing the token would revert). Lets gas be paid in USDC so a MiniPay user
