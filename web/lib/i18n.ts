@@ -194,6 +194,11 @@ const en = {
     aFriend: "A friend",
     yieldEarned: "Yield earned",
     yieldBody: "[ earned while locked ]",
+    earnLiquidityNote: "Withdrawals depend on Aave liquidity",
+    earnLiquidityTitle: "How fast can I withdraw?",
+    earnLiquidityBody:
+      "Your money earns yield in Aave while it's locked. Withdrawals are instant in normal conditions. Very rarely, if Aave's pool is fully lent out, a withdrawal may need to wait a little until funds free up — your money is always safe, you'd just try again shortly.",
+    earnLiquidityClose: "Got it",
     deposit: "Deposit",
     requestUnlock: "Request Unlock",
     withdraw: "Withdraw",
@@ -445,6 +450,11 @@ const es: typeof en = {
     aFriend: "Un amigo",
     yieldEarned: "Rendimiento ganado",
     yieldBody: "[ ganado mientras estaba bloqueado ]",
+    earnLiquidityNote: "Los retiros dependen de la liquidez de Aave",
+    earnLiquidityTitle: "¿Qué tan rápido puedo retirar?",
+    earnLiquidityBody:
+      "Tu plata genera rendimiento en Aave mientras está guardada. Los retiros son instantáneos en condiciones normales. Muy rara vez, si el fondo de Aave está totalmente prestado, un retiro puede tener que esperar un poco hasta que se libere plata — tu dinero siempre está seguro, solo lo intentas de nuevo en un rato.",
+    earnLiquidityClose: "Entendido",
     deposit: "Depositar",
     requestUnlock: "Solicitar apertura",
     withdraw: "Retirar",
