@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { useWallet } from "@/components/WalletProvider";
+import { BalanceNotice } from "@/components/BalanceNotice";
 import { TopBar, topBarActionClass } from "@/components/TopBar";
 import { useVault, useWalletBalance } from "@/hooks/useVaults";
 import {
@@ -369,16 +370,7 @@ export default function VaultDetailScreen() {
                 />
                 <span className="text-xs font-semibold text-neutral-400">{t.create.goalCurrency}</span>
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className={`text-xs ${overBalance ? "text-red-500" : "text-neutral-400"}`}>
-                  {overBalance ? t.create.insufficientFunds : ""}
-                </span>
-                {balance !== null && (
-                  <span className={`shrink-0 text-xs ${overBalance ? "text-red-500" : "text-neutral-400"}`}>
-                    {t.create.available}: ${fmt(balance)}
-                  </span>
-                )}
-              </div>
+              <BalanceNotice over={overBalance} available={balance} />
               <div className="flex gap-2.5">
                 <button
                   type="button"
