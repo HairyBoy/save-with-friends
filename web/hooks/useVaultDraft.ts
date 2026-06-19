@@ -24,7 +24,7 @@ export const DEFAULT_ICON = "🔒";
 
 const EMPTY: VaultDraft = {
   shared: false,
-  earn: false,
+  earn: true, // default to Earn Interest (where Aave exists; guarded elsewhere)
   splitMode: "contribution",
   icon: DEFAULT_ICON,
   name: "",

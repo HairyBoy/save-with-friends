@@ -49,6 +49,9 @@ export default function CreateVaultScreen() {
   const { balance } = useWalletBalance();
   const draft = useVaultDraft();
   const { shared, earn, splitMode, icon, name, goal, deposit, preset, deadline, friends } = draft;
+  // "Earn Interest" only actually applies where Aave is deployed; elsewhere the choice
+  // falls back to Standard (and the toggle is grayed), so drive the UI off this.
+  const earnActive = earn && YIELD_AVAILABLE;
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -212,17 +215,18 @@ export default function CreateVaultScreen() {
           </div>
         </div>
 
-        {/* Earn yield — for solo AND shared (both have a yield contract variant). Grayed
-            where Aave isn't deployed (testnets), so the option is visibly wired pre-mainnet. */}
+        {/* Savings Mode — for solo AND shared (both have an interest-earning contract
+            variant). "Earn Interest" is the default; it's grayed where Aave isn't
+            deployed (testnets), so it falls back to Standard there. */}
         <div className="flex flex-col gap-2">
             <p className={labelClass}>{t.create.earnLabel}</p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setVaultDraft({ earn: false })}
-                aria-pressed={!earn}
+                aria-pressed={!earnActive}
                 className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
-                  !earn
+                  !earnActive
                     ? "border-primary bg-primary text-white shadow-sm"
                     : "border-white/60 bg-white/60 text-neutral-700"
                 }`}
@@ -233,9 +237,9 @@ export default function CreateVaultScreen() {
                 type="button"
                 disabled={!YIELD_AVAILABLE}
                 onClick={() => setVaultDraft({ earn: true })}
-                aria-pressed={earn}
+                aria-pressed={earnActive}
                 className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium backdrop-blur-md transition ${
-                  earn && YIELD_AVAILABLE
+                  earnActive
                     ? "border-primary bg-primary text-white shadow-sm"
                     : "border-white/60 bg-white/60 text-neutral-700"
                 } ${!YIELD_AVAILABLE ? "cursor-not-allowed opacity-40" : ""}`}
@@ -244,7 +248,11 @@ export default function CreateVaultScreen() {
               </button>
             </div>
             <p className="text-xs text-neutral-400">
-              {YIELD_AVAILABLE ? t.create.earnHint : t.create.earnUnavailable}
+              {!YIELD_AVAILABLE
+                ? t.create.earnUnavailable
+                : earnActive
+                  ? t.create.earnHintEarn
+                  : t.create.earnHintStandard}
             </p>
         </div>
 
