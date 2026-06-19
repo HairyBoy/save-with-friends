@@ -3,20 +3,27 @@
 #
 # There is no Aave on Celo Sepolia, so the only way to click through the earning
 # flow locally is against a fork of Celo MAINNET (real Aave + USDC) with fake gas.
-# This script (with a fork node already running) deploys all four vault contracts
-# bound to real USDC, funds the dev wallet (Anvil account #0) with USDC, and prints
-# the env block the frontend's `celoFork` chain entry reads.
+# This script starts a PINNED fork (if one isn't already running), deploys all four
+# vault contracts bound to real USDC, funds the dev wallet (Anvil account #0) with
+# USDC, and prints the env block the frontend's `celoFork` chain entry reads.
 #
-# 1) In one terminal, start the fork (chain id 31337 so the app treats it as the
-#    local dev chain — dev wallet + time-travel work):
+#   cd contracts && ./script/dev-fork.sh
+#   # then, in another terminal:
+#   NEXT_PUBLIC_CHAIN=celoFork npm run --prefix ../web dev
 #
-#      anvil --fork-url https://forno.celo.org --chain-id 31337
+# Why a PINNED block: an unpinned fork re-fetches "latest" on every poll, and the
+# public RPC aborts (SIGABRT) under the dev server's polling load. Pinning makes
+# anvil cache state and nearly stop calling upstream — the real stability fix.
 #
-# 2) In another, from contracts/:  ./script/dev-fork.sh
-#
+# Why forno (not drpc/ankr): the upstream MUST support the EIP-1559 fee methods
+# (eth_maxPriorityFeePerGas / eth_feeHistory) that forge AND viem use to send txs.
+# drpc/ankr return "method not available" → every in-app transaction fails. Override
+# with FORK_RPC=<archive-rpc-with-fee-methods> if you have a sturdier one.
 set -euo pipefail
 
-RPC="${RPC:-http://127.0.0.1:8545}"
+PORT="${PORT:-8545}"
+RPC="http://127.0.0.1:${PORT}"
+FORK_RPC="${FORK_RPC:-https://forno.celo.org}"
 # Anvil's well-known account #0 — public test key, local only, controls nothing real.
 ACCOUNT0="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 KEY0="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -25,11 +32,18 @@ USDC="0xcebA9300f2b948710d2653dD7B07f33A8B32118C"   # 6 decimals
 AUSDC="0xFF8309b9e99bfd2D4021bc71a362aBD93dBd4785"  # holds the pool's underlying USDC
 FUND_USDC="${FUND_USDC:-10000000000}"               # 10,000 USDC (6 decimals)
 
-echo "→ waiting for fork at $RPC ..."
-for _ in $(seq 1 60); do
-  if cast chain-id --rpc-url "$RPC" >/dev/null 2>&1; then break; fi
-done
-cast chain-id --rpc-url "$RPC" >/dev/null 2>&1 || { echo "✗ no node at $RPC — start anvil --fork-url first"; exit 1; }
+wait_rpc() { for _ in $(seq 1 90); do cast chain-id --rpc-url "$RPC" >/dev/null 2>&1 && return 0; done; return 1; }
+
+if ! cast chain-id --rpc-url "$RPC" >/dev/null 2>&1; then
+  LATEST=$(cast block-number --rpc-url "$FORK_RPC")
+  PIN="${FORK_BLOCK:-$((LATEST - 8))}"   # a few behind head so the node still has state
+  echo "→ starting pinned fork ($FORK_RPC @ block $PIN) on :$PORT ..."
+  nohup anvil --fork-url "$FORK_RPC" --fork-block-number "$PIN" --chain-id 31337 \
+    --port "$PORT" --silent > "/tmp/anvil-fork-${PORT}.log" 2>&1 &
+  wait_rpc || { echo "✗ fork didn't come up — see /tmp/anvil-fork-${PORT}.log"; exit 1; }
+else
+  echo "→ reusing fork already running on :$PORT"
+fi
 
 echo "→ deploying plain vaults (bound to real USDC) ..."
 PLAIN=$(VAULT_TOKEN="$USDC" forge script script/Deploy.s.sol \
@@ -53,11 +67,12 @@ BAL=$(cast call "$USDC" "balanceOf(address)(uint256)" "$ACCOUNT0" --rpc-url "$RP
 
 cat <<EOF
 
-✓ Fork ready. Dev wallet USDC balance: $BAL (base units, 6 dp)
+✓ Fork ready on :$PORT. Dev wallet USDC balance: $BAL (base units, 6 dp)
 
 Run the app against the fork with:
 
   NEXT_PUBLIC_CHAIN=celoFork \\
+  NEXT_PUBLIC_FORK_RPC=$RPC \\
   NEXT_PUBLIC_FORK_SAVINGS=$SAVINGS \\
   NEXT_PUBLIC_FORK_SHARED=$SHARED \\
   NEXT_PUBLIC_FORK_YIELD_SAVINGS=$YSAVINGS \\
