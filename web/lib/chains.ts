@@ -156,6 +156,12 @@ export function toUsd(wei: bigint): number {
   return Number(formatUnits(wei, TOKEN_DECIMALS));
 }
 
+// Canonical wei -> human COP for the prize token (COPm ≈ 1 COP). The prize is
+// shown as a plain COP amount, the way the vault token is shown as USD.
+export function toCop(wei: bigint): number {
+  return Number(formatUnits(wei, PRIZE_TOKEN_DECIMALS));
+}
+
 // The raffle prize token (P3). Per-chain default, overridable via env so a future
 // mainnet deploy can point at COPm without a code change.
 export const PRIZE_TOKEN = (process.env.PRIZE_TOKEN_ADDRESS ??

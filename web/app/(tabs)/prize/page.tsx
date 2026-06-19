@@ -20,6 +20,8 @@ export default function PrizeScreen() {
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
   const usd = (n: number) => `$${fmt(n)}`;
+  // COPm ≈ 1 COP — show prizes/winnings as a plain COP amount (whole pesos).
+  const cop = (n: number) => `${n.toLocaleString(numLocale, { maximumFractionDigits: 0 })} COP`;
 
   // Countdown + window, computed from the WALL clock (the draw cron fires at
   // 17:00 UTC, so the user's clock is the right basis — not the chain clock, which
@@ -71,7 +73,7 @@ export default function PrizeScreen() {
         {prize?.youWonCopm != null && (
           <section className="rounded-2xl border border-primary bg-primary p-5 text-center text-white shadow-md">
             <p className="text-base font-bold">
-              {t.prize.youWon.replace("{amount}", fmt(prize.youWonCopm))}
+              {t.prize.youWon.replace("{amount}", cop(prize.youWonCopm))}
             </p>
           </section>
         )}
@@ -85,7 +87,7 @@ export default function PrizeScreen() {
         <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-5 text-center shadow-sm backdrop-blur-md">
           <p className="text-sm font-medium text-neutral-600">{t.prize.prizeToday}</p>
           <p className="mt-1 text-4xl font-bold text-primary-dark">
-            🎁 {prize ? `${fmt(prize.amountCopm)} COPm` : "—"}
+            🎁 {prize ? cop(prize.amountCopm) : "—"}
           </p>
           <p className="mt-3 text-xs font-medium text-neutral-500">{t.prize.nextDraw}</p>
           <p className="font-mono text-2xl font-semibold tabular-nums text-primary-dark">
@@ -135,7 +137,7 @@ export default function PrizeScreen() {
           <div className="flex items-baseline justify-between">
             <p className="text-sm font-medium text-neutral-600">{t.prize.copmBalanceLabel}</p>
             <p className="text-2xl font-bold text-primary-dark">
-              {prize ? `${fmt(prize.yourCopmBalance)} COPm` : "—"}
+              {prize ? cop(prize.yourCopmBalance) : "—"}
             </p>
           </div>
           <p className="mt-1 text-xs text-neutral-500">{t.prize.copmBalanceNote}</p>
@@ -164,7 +166,7 @@ export default function PrizeScreen() {
                   </span>
                   <span className="text-right">
                     <span className="font-semibold text-primary-dark">
-                      {fmt(w.amountCopm)} COPm
+                      {cop(w.amountCopm)}
                     </span>
                     <span className="ml-2 text-xs text-neutral-400">
                       {new Date(w.drawAt * 1000).toLocaleDateString(numLocale)}

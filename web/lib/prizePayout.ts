@@ -3,7 +3,7 @@
 // On Celo, gas is paid in the stablecoin via FEE_OPTS so the prize wallet needs no
 // CELO (it does need a small fee-currency balance). On Anvil, native gas.
 
-import { erc20Abi, formatUnits, parseUnits, type Address, type Hash } from "viem";
+import { erc20Abi, parseUnits, type Address, type Hash } from "viem";
 import {
   FEE_OPTS,
   getPrizeWalletAddress,
@@ -11,22 +11,18 @@ import {
   getPublicClient,
   PRIZE_TOKEN,
   PRIZE_TOKEN_DECIMALS,
+  toCop,
 } from "@/lib/chains";
+import { readPrizeTokenBalance } from "@/lib/onchainVaults";
 
 /**
  * An address's balance of the prize token (COPm on mainnet; the stand-in token on
- * test chains), as a human number. Best-effort: 0 on any read failure. Used to show
- * a saver their COPm winnings in-app (MiniPay also shows it natively).
+ * test chains), as a human COP number. Best-effort: 0 on any read failure. Used to
+ * show a saver their COP winnings in-app (MiniPay also shows it natively).
  */
 export async function prizeTokenBalanceOf(address: Address): Promise<number> {
   try {
-    const bal = await getPublicClient().readContract({
-      address: PRIZE_TOKEN,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [address],
-    });
-    return Number(formatUnits(bal, PRIZE_TOKEN_DECIMALS));
+    return toCop(await readPrizeTokenBalance(address));
   } catch {
     return 0;
   }

@@ -18,6 +18,7 @@ import {
   getActiveAccount,
   isLocalChain,
   isTestEnv,
+  toCop,
   toUsd,
   TOKEN_DECIMALS,
 } from "@/lib/chains";
@@ -32,6 +33,7 @@ import {
   readChainNow,
   readKeyholders,
   readOwnerVaultIds,
+  readPrizeTokenBalance,
   readTokenBalance,
   readUnlocked,
   readVault,
@@ -231,17 +233,22 @@ export async function getBalances(): Promise<{
   sharedReceiving: number;
   wallet: number;
   total: number;
+  copm: number; // COP raffle winnings (prize token) — a separate currency, NOT in total
 }> {
-  const [personal, sharedReceiving, wallet] = await Promise.all([
+  const [personal, sharedReceiving, wallet, copm] = await Promise.all([
     getSoloVaultedBalance(),
     getSharedReceiving(),
     getWalletBalance(),
+    readPrizeTokenBalance(currentUser())
+      .then(toCop)
+      .catch(() => 0),
   ]);
   return {
     personal,
     sharedReceiving,
     wallet,
-    total: personal + sharedReceiving + wallet,
+    total: personal + sharedReceiving + wallet, // USD only — COP winnings are separate
+    copm,
   };
 }
 

@@ -30,6 +30,8 @@ export default function ProfileScreen() {
 
   const numLocale = lang === "es" ? "es-CO" : "en-US";
   const fmt = (n: number) => n.toLocaleString(numLocale, { maximumFractionDigits: 2 });
+  // COP raffle winnings — a separate currency, shown as plain COP (whole pesos).
+  const cop = (n: number) => `${n.toLocaleString(numLocale, { maximumFractionDigits: 0 })} COP`;
 
   return (
     <div className="flex flex-col">
@@ -110,6 +112,13 @@ export default function ProfileScreen() {
               <p className="text-sm font-semibold">{t.profile.totalBalance}</p>
               <p className="text-base font-semibold text-primary-dark">
                 {balances ? `$${fmt(balances.total)}` : "—"}
+              </p>
+            </div>
+            {/* COP raffle winnings — a separate currency, not part of the USD total. */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-neutral-600">{t.profile.copmWinnings}</p>
+              <p className="text-sm font-medium text-neutral-700">
+                {balances ? cop(balances.copm) : "—"}
               </p>
             </div>
           </div>

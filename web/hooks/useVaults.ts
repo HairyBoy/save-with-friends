@@ -84,6 +84,7 @@ export function useBalances() {
     sharedReceiving: number;
     wallet: number;
     total: number;
+    copm: number;
   } | null>(null);
 
   useEffect(() => {
