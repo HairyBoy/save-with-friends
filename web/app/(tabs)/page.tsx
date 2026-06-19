@@ -9,7 +9,7 @@ import { useSavings, useSharedVaults } from "@/hooks/useVaults";
 import type { Vault } from "@/lib/vaults";
 import type { SharedVault } from "@/lib/sharedVaults";
 
-// My Vaults (home). Two stats + agent update, then vaults grouped into solo
+// My Vaults (home). Two stats, then vaults grouped into solo
 // ("Your Vaults") and "Shared Vaults" (pending invites flagged). First-run lands on
 // /onboarding (to pick language + set a display name); deep links like /invite/[token]
 // are NOT gated, so an invitee goes straight to accepting.
@@ -110,11 +110,6 @@ export default function MyVaultsScreen() {
               {summary ? `$${fmt(summary.savedAllTime)}` : "—"}
             </p>
           </div>
-        </section>
-
-        <section className="rounded-2xl border border-primary-light/60 bg-primary-tint/70 p-4 shadow-sm backdrop-blur-md">
-          <p className="text-sm font-semibold text-primary-dark">{t.home.agentUpdate}</p>
-          <p className="mt-1 text-sm text-neutral-600">{t.home.agentUpdateBody}</p>
         </section>
 
         {isLoading ? (
