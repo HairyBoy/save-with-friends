@@ -145,6 +145,31 @@ export async function getSharedUnlocked(id: string): Promise<boolean> {
   return readSharedUnlocked(BigInt(id));
 }
 
+/** The full pooled total across the shared vaults the user is in (everyone's money).
+ *  Feeds the home "currently saving" figure. */
+export async function getSharedGroupTotal(): Promise<number> {
+  const vaults = await getSharedVaults();
+  return vaults.reduce((sum, v) => sum + v.saved, 0);
+}
+
+/** What the user will receive across their shared vaults (USD): their own contribution
+ *  (by-contribution) or the pot if they own an owner-takes-all vault. For the Me page. */
+export async function getSharedReceiving(): Promise<number> {
+  const me = currentUser();
+  if (me === zeroAddress) return 0;
+  const meLc = me.toLowerCase();
+  const vaults = await getSharedVaults();
+  let total = 0;
+  for (const v of vaults) {
+    if (v.payoutMode === "owner-takes-all") {
+      if (v.ownerAddress.toLowerCase() === meLc) total += v.saved;
+    } else {
+      total += toUsd(await readContribution(BigInt(v.id), me));
+    }
+  }
+  return total;
+}
+
 /** What `memberAddress` receives when the vault unlocks (USD): their own contribution
  *  (by-contribution) or, for owner-takes-all, the whole pot if they're the owner. */
 export function sharedPayout(v: SharedVault, memberAddress: string): number {

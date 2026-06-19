@@ -37,6 +37,10 @@ import {
   type OnchainVault,
 } from "@/lib/onchainVaults";
 import { getFriends as loadFriends, resolveNames } from "@/lib/friends";
+import {
+  getSharedReceiving as realSharedReceiving,
+  getSharedGroupTotal as realSharedGroupTotal,
+} from "@/lib/sharedVaults";
 
 // The social graph lives in lib/friends; re-export its surface here so every screen
 // reads it through this seam. Friends are added only by invite link (no add-by-address),
@@ -240,9 +244,10 @@ let SHARED_VAULTS: Vault[] = [
 
 // --- public API (signatures unchanged; solo is on-chain, shared is stub) ----
 
+// Solo vaults only. Shared (group) vaults are a separate contract + screen now —
+// the home reads them via useSharedVaults / lib/sharedVaults.
 export async function getVaults(): Promise<Vault[]> {
-  const solo = await getOnchainSoloVaults();
-  return [...solo, ...SHARED_VAULTS];
+  return getOnchainSoloVaults();
 }
 
 export async function getVault(id: string): Promise<Vault | null> {
@@ -287,30 +292,13 @@ export async function getSoloVaultedBalance(): Promise<number> {
   return solo.reduce((sum, v) => sum + v.saved, 0);
 }
 
-/**
- * What the user will receive across their (accepted) shared vaults (USD) — their
- * payout. Under by-contribution this equals what they put in; under equal split
- * it may not. Stub data for now (shared is v2), but a single seam: swap the body
- * for a real on-chain read later and every caller updates at once.
- */
+// Shared-vault balances now come from the REAL on-chain shared vaults (lib/sharedVaults).
+// (The in-memory shared stub below is dead and slated for removal.)
 export async function getSharedReceiving(): Promise<number> {
-  return SHARED_VAULTS.filter((v) => v.inviteStatus === "accepted").reduce(
-    (sum, v) => sum + vaultPayout(v, CURRENT_USER_ID),
-    0,
-  );
+  return realSharedReceiving();
 }
-
-/**
- * The full pooled total across the user's (accepted) shared vaults — EVERYONE's
- * money, not just the user's slice. Same stub seam as above. The home "currently
- * saving" figure counts this whole group pot; the Me page counts only your slice
- * (getSharedVaultedBalance). Pending invites you haven't joined aren't counted.
- */
 export async function getSharedGroupTotal(): Promise<number> {
-  return SHARED_VAULTS.filter((v) => v.inviteStatus === "accepted").reduce(
-    (sum, v) => sum + v.saved,
-    0,
-  );
+  return realSharedGroupTotal();
 }
 
 /**
