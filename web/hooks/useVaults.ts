@@ -14,9 +14,11 @@ import {
   getVault,
   getVaultKeyholders,
   getVaults,
+  getKeyholderVaults,
   getWalletBalance,
   isVaultUnlocked,
   type VaultKeyholder,
+  type KeyholderVault,
   type DailyPrize,
   type Friend,
   type SavingsSummary,
@@ -201,6 +203,25 @@ export function useSharedVaults() {
   }, [address]);
 
   return { sharedVaults: vaults ?? [], isLoading: vaults === null };
+}
+
+/** Friends' vaults the connected user can help unlock (they hold a key). Auto-
+ *  discovered on-chain — no shared link needed. */
+export function useKeyholderVaults() {
+  const { address } = useWallet();
+  const [vaults, setVaults] = useState<KeyholderVault[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getKeyholderVaults().then((v) => {
+      if (active) setVaults(v);
+    });
+    return () => {
+      active = false;
+    };
+  }, [address]);
+
+  return { keyholderVaults: vaults ?? [], isLoading: vaults === null };
 }
 
 /** One shared vault (+ its live unlock state), for the detail screen. */

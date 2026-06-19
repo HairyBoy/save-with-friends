@@ -128,20 +128,12 @@ export default function VaultDetailScreen() {
     setDepositing(true);
   }
 
-  async function requestUnlock() {
+  function requestUnlock() {
     setError(null);
-    if (keyholders.length === 0) {
-      setNote(t.vaultDetail.noKeyholders);
-      return;
-    }
-    // The owner shares this vault's link with a keyholder out-of-band; the keyholder
-    // opens it and approves from their own wallet. Copy the link to make that easy.
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-    } catch {
-      /* clipboard may be unavailable; the note still explains the flow */
-    }
-    setNote(t.vaultDetail.unlockAsk);
+    // No link needed: each keyholder sees this vault in their own app (home →
+    // "Friends counting on you") and approves the unlock from their wallet. The
+    // owner just needs to ask one of them — so we only explain that here.
+    setNote(keyholders.length === 0 ? t.vaultDetail.noKeyholders : t.vaultDetail.unlockAsk);
   }
 
   // A keyholder approves the early unlock from their OWN connected wallet.

@@ -33,6 +33,7 @@ import {
   approveToken,
   readChainNow,
   readKeyholders,
+  readKeyholderVaultIds,
   readOwnerVaultIds,
   readPrizeTokenBalance,
   readTokenBalance,
@@ -248,6 +249,49 @@ export async function getVault(id: string): Promise<Vault | null> {
   const metaMap = await fetchVaultMeta([id]);
   const withdrawableWei = variant === "yield" ? await readWithdrawable(num) : undefined;
   return mapSoloVault(num, v, variant, metaMap.get(id), withdrawableWei);
+}
+
+// A friend's vault the connected user can help unlock (they're a keyholder).
+export type KeyholderVault = {
+  id: string;
+  name: string;
+  icon: string;
+  ownerName: string | null; // resolved display name of the owner; null → "a friend"
+  saved: number;
+  goal: number;
+};
+
+/**
+ * Vaults the connected user holds a KEY for and that still need action (open + not
+ * yet unlocked). Discovered on-chain from KeyholderAdded events — no shared link
+ * needed. Tapping one opens /vault/[id], where the keyholder approves from their
+ * own wallet. Closed/already-unlocked vaults are filtered out (nothing to do).
+ */
+export async function getKeyholderVaults(): Promise<KeyholderVault[]> {
+  const ids = await readKeyholderVaultIds(currentUser());
+  if (ids.length === 0) return [];
+  const metaMap = await fetchVaultMeta(ids.map((id) => id.toString()));
+  const rows = await Promise.all(
+    ids.map(async (id) => {
+      const v = await readVault(id);
+      if (v.closed || (await readUnlocked(id))) return null; // withdrawn or already unlocked
+      return { id: id.toString(), v };
+    }),
+  );
+  const open = rows.filter((r): r is { id: string; v: OnchainVault } => r !== null);
+  if (open.length === 0) return [];
+  const names = await resolveNames(open.map((r) => r.v.owner));
+  return open.map((r) => {
+    const meta = metaMap.get(r.id);
+    return {
+      id: r.id,
+      name: meta?.name ?? "Vault",
+      icon: meta?.icon ?? "🔒",
+      ownerName: names[r.v.owner.toLowerCase()] ?? null,
+      saved: toUsd(r.v.saved),
+      goal: toUsd(r.v.goal),
+    };
+  });
 }
 
 /** Spendable money in the user's wallet (USD) — what deposits draw from. */

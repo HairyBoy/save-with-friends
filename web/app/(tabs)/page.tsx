@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
 import { TopBar, topBarAvatarClass } from "@/components/TopBar";
-import { useSavings, useSharedVaults } from "@/hooks/useVaults";
-import type { Vault } from "@/lib/vaults";
+import { useSavings, useSharedVaults, useKeyholderVaults } from "@/hooks/useVaults";
+import type { Vault, KeyholderVault } from "@/lib/vaults";
 import type { SharedVault } from "@/lib/sharedVaults";
 
 // My Vaults (home). Two stats, then vaults grouped into solo
@@ -29,6 +29,7 @@ export default function MyVaultsScreen() {
 
   const soloVaults = vaults; // getVaults is solo-only now
   const { sharedVaults } = useSharedVaults();
+  const { keyholderVaults } = useKeyholderVaults(); // friends' vaults you can unlock
 
   // A solo or accepted-shared vault: icon, name (+ members for shared), progress.
   function progressCard(v: Vault) {
@@ -76,6 +77,36 @@ export default function MyVaultsScreen() {
           </div>
           <span className="text-sm font-medium text-neutral-500">
             ${fmt(sv.saved)} / ${fmt(sv.goal)}
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-primary-tint">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+        </div>
+      </Link>
+    );
+  }
+
+  // A friend's vault you hold a key for → links to its detail to approve the unlock.
+  function keyholderCard(kv: KeyholderVault) {
+    const pct = kv.goal > 0 ? Math.min(100, Math.round((kv.saved / kv.goal) * 100)) : 0;
+    return (
+      <Link
+        key={kv.id}
+        href={`/vault/${kv.id}`}
+        className="flex flex-col gap-3 rounded-2xl border border-white/60 bg-white/60 p-4 shadow-sm backdrop-blur-md"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-tint text-lg">
+            {kv.icon}
+          </span>
+          <div className="flex-1">
+            <p className="text-sm font-medium">{kv.name}</p>
+            <p className="text-xs text-neutral-500">
+              🔑 {kv.ownerName ?? t.shared.aFriend} · {t.home.tapToUnlock}
+            </p>
+          </div>
+          <span className="text-sm font-medium text-neutral-500">
+            ${fmt(kv.saved)} / ${fmt(kv.goal)}
           </span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-primary-tint">
@@ -134,6 +165,13 @@ export default function MyVaultsScreen() {
               <section className="flex flex-col gap-2.5">
                 <p className="text-sm font-medium text-neutral-700">{t.home.sharedVaults}</p>
                 {sharedVaults.map(sharedCard)}
+              </section>
+            )}
+
+            {keyholderVaults.length > 0 && (
+              <section className="flex flex-col gap-2.5">
+                <p className="text-sm font-medium text-neutral-700">{t.home.canUnlockTitle}</p>
+                {keyholderVaults.map(keyholderCard)}
               </section>
             )}
           </>

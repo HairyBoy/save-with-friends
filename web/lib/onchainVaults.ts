@@ -128,6 +128,39 @@ export async function readKeyholders(id: bigint, variant: SoloVariant = "plain")
   return [...ks];
 }
 
+/**
+ * The vault ids the given address is a KEYHOLDER of — so a friend's vaults can
+ * surface in their app with no shared link. The contract has no reverse getter for
+ * keyholders (unlike owners / shared members), so we read the `KeyholderAdded`
+ * event, whose `keyholder` is indexed → the RPC filters server-side. Scanned in
+ * bounded chunks (a deploy-block floor → latest) to stay under getLogs range limits.
+ * Plain solo vaults only for now — yield-vault keyholders are a follow-up (they'd
+ * need variant-aware reads + a variant-aware vault detail screen).
+ */
+export async function readKeyholderVaultIds(keyholder: Address): Promise<bigint[]> {
+  const client = getPublicClient();
+  const latest = await client.getBlock();
+  const latestNum = latest.number ?? 0n;
+  const chunk = BigInt(process.env.RAFFLE_LOG_CHUNK ?? "10000");
+  let from = BigInt(process.env.SAVINGS_VAULTS_DEPLOY_BLOCK ?? "0");
+  const ids = new Set<bigint>();
+  for (; from <= latestNum; from += chunk) {
+    const to = from + chunk - 1n > latestNum ? latestNum : from + chunk - 1n;
+    const logs = await client.getContractEvents({
+      ...contractFor("plain"),
+      eventName: "KeyholderAdded",
+      args: { keyholder },
+      fromBlock: from,
+      toBlock: to,
+    });
+    for (const log of logs) {
+      const id = (log.args as { id?: bigint }).id;
+      if (id != null) ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
 // --- writes ----------------------------------------------------------------
 // Writes go through getWalletClient(): the local dev wallet on Anvil, or the
 // injected MiniPay wallet on Celo. FEE_OPTS pays gas in USDm on Celo (no CELO
